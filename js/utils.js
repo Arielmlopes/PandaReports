@@ -1,0 +1,9 @@
+﻿(document.getElementById('car-ov').classList.contains('open')){if(e.key==='ArrowLeft')carNav(-1);if(e.key==='ArrowRight')carNav(1);}
+  if(document.getElementById('att-viewer').classList.contains('open')){if(e.key==='ArrowLeft')attNav(-1);if(e.key==='ArrowRight')attNav(1);}
+});
+['ov-upload','ov-new-client','ov-edit-client','ov-new-collab','ov-export-choice','confirm-ov','ov-org-logos','ov-ped-detail','ov-new-kbcard','ov-kbcard-detail','ov-user-roles','ov-new-todo'].forEach(id=>{
+  document.getElementById(id).addEventListener('click',e=>{if(e.target===document.getElementById(id))closeOv(id);});
+});
+document.getElementById('car-ov').addEventListener('click',e=>{if(e.target===document.getElementById('car-ov'))closeCarousel();});
+document.getElementById('att-viewer').addEventListener('click',e=>{if(e.target===document.getElementById('att-viewer'))closeAttViewer();});
+document.getElementById('lb-ov').addEventListener('click',e=>{if(e.target===document.getElementById('lb-ov'))closeLightbox();});
