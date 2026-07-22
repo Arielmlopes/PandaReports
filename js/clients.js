@@ -1,45 +1,4 @@
-﻿n.search);
-  const formClientId=params.get('form');
-  if(formClientId){
-    await initPublicForm(formClientId);
-    return;
-  }
-  loadSystemLogo();loadSavedCredentials();
-  const{data}=await db.auth.getSession();
-  if(data.session){curUser=data.session.user;await resolveUserRole(data.session.user.email);enterApp();}
-});
-
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// CLIENTS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-async function loadClients(){
-  const{data,error}=await db.from('clients').select('*').order('created_at',{ascending:true});
-  if(error){showToast('Erro ao carregar clientes',true);return}
-  CLIENTS=data||[];renderSidebar();
-}
-async function submitNewClient(){
-  const name=document.getElementById('nc-name').value.trim();
-  if(!name){showToast('Informe o nome',true);return}
-  const btn=document.getElementById('btn-create-client');
-  btn.innerHTML='<span class="spinner spinner-dark"></span>';btn.disabled=true;
-  let logoUrl=null;
-  const logoData=document.getElementById('nc-logo-data').value;
-  if(logoData){
-    const blob=dataURLtoBlob(logoData);
-    const path=`logos/client_${Date.now()}.jpg`;
-    const{error:upErr}=await db.storage.from(BUCKET).upload(path,blob,{upsert:true,contentType:'image/jpeg'});
-    if(!upErr){const{data:ud}=db.storage.from(BUCKET).getPublicUrl(path);logoUrl=ud.publicUrl;}
-  }
-  const{data,error}=await db.from('clients').insert({
-    name,color:ncColor,seg:document.getElementById('nc-seg').value.trim(),
-    resp:document.getElementById('nc-resp').value.trim(),logo_url:logoUrl
-  }).select().single();
-  btn.innerHTML='Criar cliente';btn.disabled=false;
-  if(error){showToast('Erro ao criar cliente',true);return}
-  CLIENTS.push(data);closeOv('ov-new-client');renderSidebar();showToast(`Cliente "${name}" criado!`);
-}
-async function submitEditClient(){
-  const name=document.getElementById('ec-name').value.trim();
+﻿nt.getElementById('ec-name').value.trim();
   if(!name){showToast('Informe o nome',true);return}
   const btn=document.getElementById('btn-save-client');
   btn.innerHTML='<span class="spinner spinner-dark"></span>';btn.disabled=true;
@@ -65,19 +24,19 @@ async function submitEditClient(){
   if(document.getElementById('feed'))renderFeed();
 }
 async function deleteClient(){
-  confirm2('Excluir cliente?',`"${curClient.name}" e todos os materiais serÃ£o removidos permanentemente.`,async()=>{
+  confirm2('Excluir cliente?',`"${curClient.name}" e todos os materiais serão removidos permanentemente.`,async()=>{
     const{error}=await db.from('clients').delete().eq('id',curClient.id);
     if(error){showToast('Erro ao excluir',true);return}
     CLIENTS=CLIENTS.filter(c=>c.id!==curClient.id);
     delete MATS_CACHE[curClient.id];
     curClient=null;closeOv('ov-edit-client');renderSidebar();
-    showScreen('dashboard');showToast('Cliente excluÃ­do');
+    showScreen('dashboard');showToast('Cliente excluído');
   });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // COLLABS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 async function loadCollabs(){
   const{data,error}=await db.from('collaborators').select('*').order('name',{ascending:true});
   if(error){COLLABS=[];renderCollabList();return}
@@ -89,7 +48,7 @@ function renderCollabList(){
     <div class="collab-item">
       <div class="collab-avatar">${c.name.charAt(0).toUpperCase()}</div>
       <span class="collab-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${c.name}</span>
-      <button class="collab-del" onclick="deleteCollab('${c.id}','${c.name.replace(/'/g,"\\'")}')" title="Excluir colaborador">ðŸ—‘</button>
+      <button class="collab-del" onclick="deleteCollab('${c.id}','${c.name.replace(/'/g,"\\'")}')" title="Excluir colaborador">🗑</button>
     </div>`).join('')||'<div style="padding:8px 14px;font-size:12px;color:var(--text3)">Nenhum colaborador</div>';
 }
 function openNewCollabModal(){
@@ -114,39 +73,39 @@ async function submitNewCollab(){
   COLLABS.push(data);closeOv('ov-new-collab');renderCollabList();showToast(`"${name}" adicionado!`);
 }
 function deleteCollab(id,name){
-  confirm2('Excluir colaborador?',`"${name}" serÃ¡ removido. Materiais vinculados nÃ£o serÃ£o afetados.`,async()=>{
+  confirm2('Excluir colaborador?',`"${name}" será removido. Materiais vinculados não serão afetados.`,async()=>{
     const{error}=await db.from('collaborators').delete().eq('id',id);
     if(error){showToast('Erro ao excluir',true);return}
-    COLLABS=COLLABS.filter(c=>c.id!==id);renderCollabList();showToast('Colaborador excluÃ­do');
+    COLLABS=COLLABS.filter(c=>c.id!==id);renderCollabList();showToast('Colaborador excluído');
   });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // MATERIALS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 async function loadMaterials(clientId){
   const{data,error}=await db.from('materials').select('*, files(*)').eq('client_id',clientId).order('date',{ascending:false});
   if(error){showToast('Erro ao carregar materiais',true);return[]}
   MATS_CACHE[clientId]=data||[];return MATS_CACHE[clientId];
 }
 function deleteMaterial(matId){
-  confirm2('Excluir material?','Esta aÃ§Ã£o nÃ£o pode ser desfeita. O material e seus arquivos serÃ£o removidos.',async()=>{
+  confirm2('Excluir material?','Esta ação não pode ser desfeita. O material e seus arquivos serão removidos.',async()=>{
     const{error}=await db.from('materials').delete().eq('id',matId);
     if(error){showToast('Erro ao excluir',true);return}
     if(curClient)MATS_CACHE[curClient.id]=(MATS_CACHE[curClient.id]||[]).filter(m=>m.id!==matId);
     ALL_MATS_LIGHT=ALL_MATS_LIGHT.filter(m=>m.id!==matId);
-    renderFeed();renderSidebar();showToast('Material excluÃ­do');
+    renderFeed();renderSidebar();showToast('Material excluído');
   });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // UPLOAD
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 async function submitUpload(){
   if(!curClient)return;
   const btn=document.getElementById('btn-save-upload');
   const prog=document.getElementById('upload-progress'),bar=document.getElementById('upload-progress-bar');
-  btn.innerHTML='<span class="spinner spinner-dark"></span> Salvandoâ€¦';btn.disabled=true;
+  btn.innerHTML='<span class="spinner spinner-dark"></span> Salvando…';btn.disabled=true;
   prog.style.display='block';bar.style.width='5%';
   try{
     const desc=document.getElementById('up-desc').value.trim();
@@ -181,16 +140,16 @@ async function submitUpload(){
   finally{btn.innerHTML='Salvar material';btn.disabled=false;}
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // SIDEBAR RENDER
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 function matCount(cid){return ALL_MATS_LIGHT.filter(m=>m.client_id===cid).length;}
 async function loadAllMatsLight(){
   const{data,error}=await db.from('materials').select('id,client_id,type');
   ALL_MATS_LIGHT=error?[]:(data||[]);
 }
 function syncClientMatCount(cid){
-  // apÃ³s carregar materiais completos de um cliente, sincroniza a contagem leve com a real
+  // após carregar materiais completos de um cliente, sincroniza a contagem leve com a real
   const real=(MATS_CACHE[cid]||[]).map(m=>({id:m.id,client_id:cid,type:m.type}));
   ALL_MATS_LIGHT=ALL_MATS_LIGHT.filter(m=>m.client_id!==cid).concat(real);
 }
@@ -215,7 +174,7 @@ function openNewClientModal(){
   ncColor=PALETTE[0];
   ['nc-name','nc-seg','nc-resp'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('nc-logo-data').value='';
-  document.getElementById('nc-logo-box').innerHTML='<div style="font-size:26px;margin-bottom:5px">ðŸ¢</div><div style="font-size:11px;color:var(--text3)">Clique para enviar logo</div>';
+  document.getElementById('nc-logo-box').innerHTML='<div style="font-size:26px;margin-bottom:5px">🏢</div><div style="font-size:11px;color:var(--text3)">Clique para enviar logo</div>';
   buildColorGrid('nc-colors',ncColor,true);
   openOv('ov-new-client');setTimeout(()=>document.getElementById('nc-name').focus(),200);
 }
@@ -235,7 +194,7 @@ function openEditClient(){
   document.getElementById('ec-logo-data').value='';
   const box=document.getElementById('ec-logo-box');
   if(curClient.logo_url)box.innerHTML=`<img src="${curClient.logo_url}" class="logo-preview"><div style="font-size:11px;color:var(--text3)">Clique para alterar</div>`;
-  else box.innerHTML='<div style="font-size:26px;margin-bottom:5px">ðŸ¢</div><div style="font-size:11px;color:var(--text3)">Clique para enviar logo</div>';
+  else box.innerHTML='<div style="font-size:26px;margin-bottom:5px">🏢</div><div style="font-size:11px;color:var(--text3)">Clique para enviar logo</div>';
   buildColorGrid('ec-colors',ecColor,false);openOv('ov-edit-client');
 }
 function previewClientLogo(input,boxId,dataId){
@@ -247,9 +206,9 @@ function previewClientLogo(input,boxId,dataId){
   };reader.readAsDataURL(file);
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // NAVIGATION
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 async function showScreen(name){
   const ct=document.getElementById('content');
   const tt=document.getElementById('tb-title'),tp=document.getElementById('tb-period');
@@ -259,12 +218,12 @@ async function showScreen(name){
   document.getElementById('nav-todo-btn')?.classList.toggle('active',name==='todo');
   if(name==='dashboard'){
     setRoute('dashboard');
-    tt.textContent='Dashboard';tp.textContent='VisÃ£o geral';ct.innerHTML=renderDashboard();
+    tt.textContent='Dashboard';tp.textContent='Visão geral';ct.innerHTML=renderDashboard();
   }else if(name==='kanban'){
     setRoute('kanban');
     curClient=null;renderSidebar();
-    tt.textContent='Fluxo';tp.textContent='Quadro de demandas da agÃªncia';
-    ct.innerHTML='<div class="page-loading"><div class="spinner"></div> Carregando quadroâ€¦</div>';
+    tt.textContent='Fluxo';tp.textContent='Quadro de demandas da agência';
+    ct.innerHTML='<div class="page-loading"><div class="spinner"></div> Carregando quadro…</div>';
     await loadKanbanColumns();await loadKanbanCards();
     ct.innerHTML=renderKanbanScreen();
     setupKanbanDnD();
@@ -272,44 +231,44 @@ async function showScreen(name){
     setRoute('todo');
     curClient=null;renderSidebar();
     tt.textContent='To-Do Semanal';tp.textContent='Planejamento da semana';
-    ct.innerHTML='<div class="page-loading"><div class="spinner"></div> Carregandoâ€¦</div>';
+    ct.innerHTML='<div class="page-loading"><div class="spinner"></div> Carregando…</div>';
     await loadTodoItems();
     ct.innerHTML=renderTodoScreen();
     startTodoColorRefresh();
   }else if(name==='client'&&curClient){
     setRoute(`client/${curClient.id}/feed`);
-    tt.textContent=curClient.name;tp.textContent='Carregandoâ€¦';
+    tt.textContent=curClient.name;tp.textContent='Carregando…';
     bE.style.display=bEd.style.display=bU.style.display='inline-flex';
-    ct.innerHTML='<div class="page-loading"><div class="spinner"></div> Carregandoâ€¦</div>';
+    ct.innerHTML='<div class="page-loading"><div class="spinner"></div> Carregando…</div>';
     clientTab='feed';
     await Promise.all([loadMaterials(curClient.id),loadBriefings()]);
     syncClientMatCount(curClient.id);
-    tp.textContent='PerÃ­odo atual';switchClientTab('feed');
+    tp.textContent='Período atual';switchClientTab('feed');
   }else if(name==='export'&&curClient){
     tt.textContent='Exportar';tp.textContent=curClient.name;
     openOv('ov-export-choice');
   }else if(name==='settings'){
     setRoute('settings');
-    tt.textContent='ConfiguraÃ§Ãµes';tp.textContent='Conta & preferÃªncias';ct.innerHTML=renderSettings();
+    tt.textContent='Configurações';tp.textContent='Conta & preferências';ct.innerHTML=renderSettings();
   }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // DASHBOARD
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 function renderDashboard(){
   const total=ALL_MATS_LIGHT.length;
-  return`<div class="dash-h"><h2>Bem-vindo Ã  Panda Reports ðŸ¼</h2><p>Organize e apresente suas entregas com elegÃ¢ncia.</p></div>
+  return`<div class="dash-h"><h2>Bem-vindo à Panda Reports 🐼</h2><p>Organize e apresente suas entregas com elegância.</p></div>
     <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:22px">
       <div class="kpi-card"><div class="kpi-lbl">Clientes</div><div class="kpi-val g">${CLIENTS.length}</div></div>
       <div class="kpi-card"><div class="kpi-lbl">Entregas totais</div><div class="kpi-val">${total}</div></div>
       <div class="kpi-card"><div class="kpi-lbl">Colaboradores</div><div class="kpi-val g">${COLLABS.length}</div></div>
-      <div class="kpi-card"><div class="kpi-lbl">UsuÃ¡rio</div><div class="kpi-val g" style="font-size:12px;letter-spacing:0">${curUser?.email?.split('@')[0]||'â€”'}</div></div>
+      <div class="kpi-card"><div class="kpi-lbl">Usuário</div><div class="kpi-val g" style="font-size:12px;letter-spacing:0">${curUser?.email?.split('@')[0]||'—'}</div></div>
     </div>
     <div class="s-sec-label" style="padding:0 0 10px">Clientes</div>
     <div class="cl-grid">
       ${CLIENTS.length===0
-        ?'<div class="empty"><div class="ico">ðŸ¢</div><h3>Nenhum cliente ainda</h3><p>Clique em "Novo Cliente" para comeÃ§ar</p></div>'
+        ?'<div class="empty"><div class="ico">🏢</div><h3>Nenhum cliente ainda</h3><p>Clique em "Novo Cliente" para começar</p></div>'
         :CLIENTS.map(c=>{
           const ms=ALL_MATS_LIGHT.filter(m=>m.client_id===c.id);
           const cnt={};TYPES.forEach(t=>{cnt[t.id]=0});ms.forEach(m=>{if(cnt[m.type]!==undefined)cnt[m.type]++;});
@@ -319,7 +278,7 @@ function renderDashboard(){
               ${c.logo_url?`<img src="${c.logo_url}" style="width:20px;height:20px;border-radius:5px;object-fit:cover;flex-shrink:0">`:`<span style="width:7px;height:7px;border-radius:50%;background:${c.color};flex-shrink:0"></span>`}
               <h3>${c.name}</h3>
             </div>
-            <div class="meta">${ms.length} materiais${c.seg?' Â· '+c.seg:''}</div>
+            <div class="meta">${ms.length} materiais${c.seg?' · '+c.seg:''}</div>
             <div class="stats">
               ${top.map(([type,count])=>`<div class="stat"><strong style="color:${c.color}">${count}</strong><span>${TYPES.find(t=>t.id===type)?.label||type}</span></div>`).join('')}
               ${top.length===0?'<span style="font-size:12px;color:var(--text3)">Sem materiais ainda</span>':''}
@@ -328,9 +287,9 @@ function renderDashboard(){
     </div>`;
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // CLIENT SCREEN
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 function getMats(){let ms=MATS_CACHE[curClient.id]||[];if(activeT!=='all')ms=ms.filter(m=>m.type===activeT);return ms;}
 function getKPIs(){
   const ms=MATS_CACHE[curClient.id]||[];const c={};TYPES.forEach(t=>{c[t.id]=0});ms.forEach(m=>{if(c[m.type]!==undefined)c[m.type]++;});
@@ -356,13 +315,13 @@ function renderClient(){
       <div class="client-logo">${logo}</div>
       <div class="client-header-info" style="flex:1">
         <h2>${curClient.name}</h2>
-        <p>${curClient.seg||''}${curClient.seg&&curClient.resp?' Â· ':''}${curClient.resp||''}</p>
+        <p>${curClient.seg||''}${curClient.seg&&curClient.resp?' · ':''}${curClient.resp||''}</p>
       </div>
-      <button class="btn btn-indigo btn-sm" onclick="openOrgLogosModal()">ðŸ”— Link de pedido</button>
+      <button class="btn btn-indigo btn-sm" onclick="openOrgLogosModal()">🔗 Link de pedido</button>
     </div>
     <div class="f-bar" style="margin-bottom:18px">
-      <button class="f-chip ${clientTab==='feed'?'active':''}" onclick="switchClientTab('feed')">ðŸ—‚ Materiais</button>
-      <button class="f-chip ${clientTab==='pedidos'?'active':''}" onclick="switchClientTab('pedidos')">ðŸ“‹ Pedidos${pendingCount>0?` <span style="background:rgba(234,179,8,.25);color:#eab308;padding:1px 6px;border-radius:100px;font-size:10px;margin-left:3px">${pendingCount}</span>`:''}</button>
+      <button class="f-chip ${clientTab==='feed'?'active':''}" onclick="switchClientTab('feed')">🗂 Materiais</button>
+      <button class="f-chip ${clientTab==='pedidos'?'active':''}" onclick="switchClientTab('pedidos')">📋 Pedidos${pendingCount>0?` <span style="background:rgba(234,179,8,.25);color:#eab308;padding:1px 6px;border-radius:100px;font-size:10px;margin-left:3px">${pendingCount}</span>`:''}</button>
     </div>
     <div id="client-tab-body"></div>`;
 }
@@ -378,15 +337,15 @@ function switchClientTab(tab){
       <div class="kpi-grid">
         <div class="kpi-card"><div class="kpi-lbl">Total</div><div class="kpi-val g">${getKPIs().total}</div><div class="kpi-sub">materiais</div></div>
         <div class="kpi-card"><div class="kpi-lbl">Posts</div><div class="kpi-val">${getKPIs().post}</div></div>
-        <div class="kpi-card"><div class="kpi-lbl">CarrossÃ©is</div><div class="kpi-val">${getKPIs().carousel}</div></div>
-        <div class="kpi-card"><div class="kpi-lbl">VÃ­deos & Reels</div><div class="kpi-val">${getKPIs().video+getKPIs().reels}</div></div>
+        <div class="kpi-card"><div class="kpi-lbl">Carrosséis</div><div class="kpi-val">${getKPIs().carousel}</div></div>
+        <div class="kpi-card"><div class="kpi-lbl">Vídeos & Reels</div><div class="kpi-val">${getKPIs().video+getKPIs().reels}</div></div>
         <div class="kpi-card"><div class="kpi-lbl">Stories</div><div class="kpi-val">${getKPIs().story}</div></div>
       </div>
       <div class="f-bar" id="f-bar">
-        <span class="f-lbl">PerÃ­odo:</span>
+        <span class="f-lbl">Período:</span>
         <button class="f-chip ${activeP==='week'?'active':''}" data-p="week">Esta semana</button>
         <button class="f-chip ${activeP==='lastweek'?'active':''}" data-p="lastweek">Sem. passada</button>
-        <button class="f-chip ${activeP==='month'?'active':''}" data-p="month">Este mÃªs</button>
+        <button class="f-chip ${activeP==='month'?'active':''}" data-p="month">Este mês</button>
         <div class="f-div"></div>
         <span class="f-lbl">Tipo:</span>
         <button class="f-chip ${activeT==='all'?'active':''}" data-t="all">Todos</button>
@@ -402,13 +361,13 @@ function switchClientTab(tab){
 }
 function renderClientPedidos(){
   const list=BRIEFINGS.filter(b=>b.client_id===curClient.id);
-  if(list.length===0)return'<div class="empty"><div class="ico">ðŸ“­</div><h3>Nenhum pedido recebido</h3><p>Compartilhe o link de pedido deste cliente para receber solicitaÃ§Ãµes</p></div>';
+  if(list.length===0)return'<div class="empty"><div class="ico">📭</div><h3>Nenhum pedido recebido</h3><p>Compartilhe o link de pedido deste cliente para receber solicitações</p></div>';
   return list.map(b=>renderPedCard(b)).join('');
 }
 function renderFeed(){
   const ms=getMats(),g=groupByDay(ms),feed=document.getElementById('feed');
   if(!feed)return;
-  if(!Object.keys(g).length){feed.innerHTML='<div class="empty"><div class="ico">ðŸ“­</div><h3>Nenhum material</h3><p>Adicione materiais com o botÃ£o acima</p></div>';return;}
+  if(!Object.keys(g).length){feed.innerHTML='<div class="empty"><div class="ico">📭</div><h3>Nenhum material</h3><p>Adicione materiais com o botão acima</p></div>';return;}
   feed.innerHTML=Object.entries(g).map(([day,items])=>`
     <div class="feed-sec">
       <div class="feed-day">${day}<span class="feed-day-ct">${items.length} ${items.length===1?'item':'itens'}</span></div>
@@ -423,7 +382,7 @@ function renderCard(m){
   if(first?.url){
     if(first.file_type==='video')thumb=`<video src="${first.url}" muted preload="metadata" style="width:100%;height:100%;object-fit:cover"></video>`;
     else thumb=`<img src="${first.url}" alt="" loading="lazy">`;
-  }else thumb=`<span class="placeholder">${t?.emoji||'ðŸ“„'}</span>`;
+  }else thumb=`<span class="placeholder">${t?.emoji||'📄'}</span>`;
   const fn=isCar?`openCarousel('${m.id}')`:`openLightbox('${m.id}')`;
   const collabName=COLLABS.find(c=>c.id===m.collaborator_id)?.name||'';
   return`
@@ -431,13 +390,13 @@ function renderCard(m){
       <div class="mat-thumb" onclick="${fn}">
         ${thumb}
         <span class="mat-badge ${t?.bc||''}">${t?.label||m.type}</span>
-        ${isCar?`<div class="slide-ct">â–ª ${files.length} slides</div>`:''}
-        <button class="mat-delete" onclick="event.stopPropagation();deleteMaterial('${m.id}')" title="Excluir">ðŸ—‘</button>
+        ${isCar?`<div class="slide-ct">▪ ${files.length} slides</div>`:''}
+        <button class="mat-delete" onclick="event.stopPropagation();deleteMaterial('${m.id}')" title="Excluir">🗑</button>
       </div>
       <div class="mat-info">
         <div class="mat-date">${fmtDate(m.date)}</div>
-        <div class="mat-desc">${m.description||'Sem descriÃ§Ã£o'}</div>
-        ${collabName?`<div class="mat-collab">ðŸ‘¤ ${collabName}</div>`:''}
+        <div class="mat-desc">${m.description||'Sem descrição'}</div>
+        ${collabName?`<div class="mat-collab">👤 ${collabName}</div>`:''}
       </div>
     </div>`;
 }
@@ -455,6 +414,75 @@ function setupFilters(){
   },80);
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // UPLOAD UI
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
+function openUploadModal(){
+  selType='post';upFiles=[];
+  document.getElementById('up-desc').value='';
+  document.getElementById('dz-files').innerHTML='';
+  document.getElementById('preview-strip').innerHTML='';
+  document.getElementById('dz-hint').textContent='PNG, JPG, MP4 · múltiplos arquivos';
+  const sel=document.getElementById('up-collab');
+  sel.innerHTML='<option value="">— Selecionar —</option>'+COLLABS.map(c=>`<option value="${c.id}">${c.name}${c.role?' ('+c.role+')':''}</option>`).join('');
+  document.getElementById('type-grid').innerHTML=TYPES.map(t=>`
+    <div class="type-btn ${t.id==='post'?'sel':''}" onclick="pickType('${t.id}',this)">
+      <span class="te">${t.emoji}</span><span class="tl">${t.label}</span>
+    </div>`).join('');
+  openOv('ov-upload');
+}
+function pickType(id,el){
+  selType=id;document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('sel'));el.classList.add('sel');
+  const hint=document.getElementById('dz-hint');
+  if(id==='carousel')hint.textContent='Múltiplas imagens = 1 carrossel agrupado';
+  else if(id==='video'||id==='reels')hint.textContent='MP4, MOV, AVI';
+  else hint.textContent='PNG, JPG, GIF, WEBP';
+}
+function onDragOver(e){e.preventDefault();document.getElementById('dropzone').classList.add('drag')}
+function onDragLeave(){document.getElementById('dropzone').classList.remove('drag')}
+function onDrop(e){e.preventDefault();document.getElementById('dropzone').classList.remove('drag');handleFiles(e.dataTransfer.files)}
+function onFileSelect(inp){handleFiles(inp.files);inp.value='';}
+function handleFiles(files){
+  Array.from(files).slice(0,30).forEach(f=>{upFiles.push({file:f,url:URL.createObjectURL(f),name:f.name,ft:getFileType(f)});});
+  renderUpFiles();
+}
+function removeFile(i){URL.revokeObjectURL(upFiles[i].url);upFiles.splice(i,1);renderUpFiles();}
+function renderUpFiles(){
+  document.getElementById('dz-files').innerHTML=upFiles.map((f,i)=>`
+    <div class="dz-file">
+      <span>${f.ft==='video'?'🎬':'🖼'}</span>
+      <span class="fn">${f.name}</span>
+      <span class="sz">${(f.file.size/1024).toFixed(0)} KB</span>
+      <span class="rm" onclick="removeFile(${i})">×</span>
+    </div>`).join('');
+  document.getElementById('preview-strip').innerHTML=upFiles.map(f=>
+    f.ft==='image'?`<img class="p-thumb" src="${f.url}" alt="">`:`<div class="p-thumb-v">${FILE_TYPE_ICONS[f.ft]||'📎'}</div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════
+// LIGHTBOX & CAROUSEL
+// ═══════════════════════════════════════════════════
+function findMat(id){for(const ms of Object.values(MATS_CACHE)){const m=ms.find(m=>m.id===id);if(m)return m;}return null;}
+function openLightbox(matId){
+  const m=findMat(matId);if(!m)return;
+  const t=TYPES.find(t=>t.id===m.type);
+  const ct=document.getElementById('lb-content'),info=document.getElementById('lb-info');
+  const first=(m.files||[])[0];
+  if(first?.url){
+    if(first.file_type==='video')ct.innerHTML=`<video class="lb-vid" src="${first.url}" controls autoplay></video>`;
+    else ct.innerHTML=`<img class="lb-img" src="${first.url}" alt="">`;
+    info.textContent=`${t?.label} · ${fmtDate(m.date)} · ${m.description}`;
+  }else{
+    ct.innerHTML=`<div style="text-align:center;padding:20px"><div style="font-size:70px;margin-bottom:12px">${t?.emoji||'📄'}</div><div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">${t?.label}</div><div style="font-size:13px;color:var(--text2)">${m.description}</div><div style="font-size:12px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 14px;margin-top:10px">Nenhum arquivo enviado ainda.</div></div>`;
+    info.textContent=fmtDate(m.date);
+  }
+  document.getElementById('lb-ov').classList.add('open');
+}
+function closeLightbox(){document.getElementById('lb-ov').classList.remove('open');const v=document.querySelector('#lb-content video');if(v)v.pause();}
+function openCarousel(matId){
+  const m=findMat(matId);if(!m)return;
+  carData={slides:m.files||[],cur:0,type:m.type};renderCarSlide();
+  document.getElementById('car-ov').classList.add('open');
+}
+function renderCarSlide(){
+  const{slides,cur,type}=carData,t=TYPES.

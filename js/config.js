@@ -1,42 +1,42 @@
-﻿// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+﻿// ═══════════════════════════════════════════════════
 const SUPABASE_URL='https://ovuvykctdwugnzqmzueu.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92dXZ5a2N0ZHd1Z256cW16dWV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyOTM1NzgsImV4cCI6MjA5NDg2OTU3OH0.1EpkvQGCREkk_CVOdp4Et7901o1S3_oXSByE4CV9xsY';
 const BUCKET='uploads';
 const{createClient}=supabase;
 const db=createClient(SUPABASE_URL,SUPABASE_KEY);
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // CONSTANTS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 const PALETTE=['#6BAF45','#3b82f6','#a855f7','#f97316','#ec4899','#eab308','#14b8a6','#ef4444','#64748b','#06b6d4'];
 const TYPES=[
-  {id:'post',label:'Post',emoji:'ðŸ–¼',bc:'b-post'},
-  {id:'carousel',label:'Carrossel',emoji:'ðŸŽ ',bc:'b-carousel'},
-  {id:'video',label:'VÃ­deo',emoji:'ðŸŽ¬',bc:'b-video'},
-  {id:'story',label:'Story',emoji:'ðŸ“±',bc:'b-story'},
-  {id:'reels',label:'Reels',emoji:'ðŸŽž',bc:'b-reels'},
-  {id:'identity',label:'ID Visual',emoji:'ðŸŽ¨',bc:'b-identity'},
+  {id:'post',label:'Post',emoji:'🖼',bc:'b-post'},
+  {id:'carousel',label:'Carrossel',emoji:'🎠',bc:'b-carousel'},
+  {id:'video',label:'Vídeo',emoji:'🎬',bc:'b-video'},
+  {id:'story',label:'Story',emoji:'📱',bc:'b-story'},
+  {id:'reels',label:'Reels',emoji:'🎞',bc:'b-reels'},
+  {id:'identity',label:'ID Visual',emoji:'🎨',bc:'b-identity'},
 ];
-const TE={post:'ðŸ–¼',carousel:'ðŸŽ ',video:'ðŸŽ¬',story:'ðŸ“±',reels:'ðŸŽž',identity:'ðŸŽ¨'};
-const DAYS=['Domingo','Segunda','TerÃ§a','Quarta','Quinta','Sexta','SÃ¡bado'];
-const MONTHS=['Janeiro','Fevereiro','MarÃ§o','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const TE={post:'🖼',carousel:'🎠',video:'🎬',story:'📱',reels:'🎞',identity:'🎨'};
+const DAYS=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+const MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MS=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-const DEF={post:'Novo post',carousel:'Novo carrossel',video:'Novo vÃ­deo',story:'Novo story',reels:'Novo reels',identity:'Nova identidade visual'};
+const DEF={post:'Novo post',carousel:'Novo carrossel',video:'Novo vídeo',story:'Novo story',reels:'Novo reels',identity:'Nova identidade visual'};
 
 // Briefing form constants
 const MAT_TYPES_PF=[
-  {id:'post',label:'Post Ãºnico',emoji:'ðŸ–¼'},
-  {id:'carousel',label:'Carrossel',emoji:'ðŸŽ '},
-  {id:'video',label:'VÃ­deo / Reels',emoji:'ðŸŽ¬'},
-  {id:'story',label:'Story',emoji:'ðŸ“±'},
-  {id:'print',label:'Material impresso',emoji:'ðŸ–¨'},
-  {id:'other',label:'Outro',emoji:'âœï¸'},
+  {id:'post',label:'Post único',emoji:'🖼'},
+  {id:'carousel',label:'Carrossel',emoji:'🎠'},
+  {id:'video',label:'Vídeo / Reels',emoji:'🎬'},
+  {id:'story',label:'Story',emoji:'📱'},
+  {id:'print',label:'Material impresso',emoji:'🖨'},
+  {id:'other',label:'Outro',emoji:'✏️'},
 ];
-const OBJ_OPTIONS=['Informar','Divulgar evento/promoÃ§Ã£o','Convocar pÃºblico','Apresentar resultados','Campanha de conscientizaÃ§Ã£o','Outro'];
+const OBJ_OPTIONS=['Informar','Divulgar evento/promoção','Convocar público','Apresentar resultados','Campanha de conscientização','Outro'];
 const STATUS_OPTIONS=[
   {id:'Recebido - Aguardando producao',label:'Recebido',cls:'s-recebido'},
-  {id:'Em producao',label:'Em produÃ§Ã£o',cls:'s-producao'},
-  {id:'Concluido',label:'ConcluÃ­do',cls:'s-concluido'},
+  {id:'Em producao',label:'Em produção',cls:'s-producao'},
+  {id:'Concluido',label:'Concluído',cls:'s-concluido'},
 ];
 
 // Kanban
@@ -45,19 +45,19 @@ const KANBAN_COLUMNS_FALLBACK=[
   {id:'pedidos_clientes',slug:'pedidos_clientes',label:'Pedidos Clientes',color:'#eab308',position:0},
   {id:'demanda_semana',slug:null,label:'Demanda da Semana',color:'#3b82f6',position:1},
   {id:'demanda_dia',slug:null,label:'Demanda do Dia',color:'#06b6d4',position:2},
-  {id:'em_producao',slug:null,label:'Em ProduÃ§Ã£o',color:'#a855f7',position:3},
-  {id:'alteracao',slug:null,label:'AlteraÃ§Ã£o',color:'#f97316',position:4},
-  {id:'aprovacao_agencia',slug:null,label:'AprovaÃ§Ã£o AgÃªncia',color:'#6BAF45',position:5},
-  {id:'aprovacao_cliente',slug:null,label:'AprovaÃ§Ã£o Cliente',color:'#ec4899',position:6},
+  {id:'em_producao',slug:null,label:'Em Produção',color:'#a855f7',position:3},
+  {id:'alteracao',slug:null,label:'Alteração',color:'#f97316',position:4},
+  {id:'aprovacao_agencia',slug:null,label:'Aprovação Agência',color:'#6BAF45',position:5},
+  {id:'aprovacao_cliente',slug:null,label:'Aprovação Cliente',color:'#ec4899',position:6},
   {id:'finalizado',slug:null,label:'Finalizado',color:'#22c55e',position:7},
 ];
 const COL_PALETTE=['#6BAF45','#3b82f6','#a855f7','#f97316','#ec4899','#eab308','#14b8a6','#ef4444','#64748b','#06b6d4','#22c55e'];
 let kanbanDraggedType=null,kanbanDraggedColId=null;
 const PF_TYPE_TO_MAT={post:'post',carousel:'carousel',video:'video',story:'story',print:'post',other:'post'};
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // STATE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 let CLIENTS=[],COLLABS=[],MATS_CACHE={};
 let curClient=null,selType='post',upFiles=[],activeP='week',activeT='all';
 let carData={slides:[],cur:0,type:'carousel'};
@@ -98,4 +98,18 @@ let ORG_LOGOS_CACHE={};
 let BRIEFINGS=[];
 let curOrgLogoData=null;
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
+// SIDEBAR TOGGLE
+// ═══════════════════════════════════════════════════
+function toggleSidebar(){
+  sidebarCollapsed=!sidebarCollapsed;
+  const sb=document.getElementById('sidebar');
+  const btn=document.getElementById('s-toggle-btn');
+  sb.classList.toggle('collapsed',sidebarCollapsed);
+  btn.textContent=sidebarCollapsed?'›':'‹';
+  btn.title=sidebarCollapsed?'Expandir sidebar':'Recolher sidebar';
+  localStorage.setItem('sidebar_collapsed',sidebarCollapsed?'1':'0');
+}
+function initSidebarState(){
+  const saved=localStorage.getItem('sidebar_collapsed');
+  if(saved==='1'){sidebarCollapsed=true;document.getElementById('sidebar').classList.add('collapsed');document.

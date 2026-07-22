@@ -1,79 +1,10 @@
-﻿â•â•â•â•â•â•â•â•â•â•
-function openUploadModal(){
-  selType='post';upFiles=[];
-  document.getElementById('up-desc').value='';
-  document.getElementById('dz-files').innerHTML='';
-  document.getElementById('preview-strip').innerHTML='';
-  document.getElementById('dz-hint').textContent='PNG, JPG, MP4 Â· mÃºltiplos arquivos';
-  const sel=document.getElementById('up-collab');
-  sel.innerHTML='<option value="">â€” Selecionar â€”</option>'+COLLABS.map(c=>`<option value="${c.id}">${c.name}${c.role?' ('+c.role+')':''}</option>`).join('');
-  document.getElementById('type-grid').innerHTML=TYPES.map(t=>`
-    <div class="type-btn ${t.id==='post'?'sel':''}" onclick="pickType('${t.id}',this)">
-      <span class="te">${t.emoji}</span><span class="tl">${t.label}</span>
-    </div>`).join('');
-  openOv('ov-upload');
-}
-function pickType(id,el){
-  selType=id;document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('sel'));el.classList.add('sel');
-  const hint=document.getElementById('dz-hint');
-  if(id==='carousel')hint.textContent='MÃºltiplas imagens = 1 carrossel agrupado';
-  else if(id==='video'||id==='reels')hint.textContent='MP4, MOV, AVI';
-  else hint.textContent='PNG, JPG, GIF, WEBP';
-}
-function onDragOver(e){e.preventDefault();document.getElementById('dropzone').classList.add('drag')}
-function onDragLeave(){document.getElementById('dropzone').classList.remove('drag')}
-function onDrop(e){e.preventDefault();document.getElementById('dropzone').classList.remove('drag');handleFiles(e.dataTransfer.files)}
-function onFileSelect(inp){handleFiles(inp.files);inp.value='';}
-function handleFiles(files){
-  Array.from(files).slice(0,30).forEach(f=>{upFiles.push({file:f,url:URL.createObjectURL(f),name:f.name,ft:getFileType(f)});});
-  renderUpFiles();
-}
-function removeFile(i){URL.revokeObjectURL(upFiles[i].url);upFiles.splice(i,1);renderUpFiles();}
-function renderUpFiles(){
-  document.getElementById('dz-files').innerHTML=upFiles.map((f,i)=>`
-    <div class="dz-file">
-      <span>${f.ft==='video'?'ðŸŽ¬':'ðŸ–¼'}</span>
-      <span class="fn">${f.name}</span>
-      <span class="sz">${(f.file.size/1024).toFixed(0)} KB</span>
-      <span class="rm" onclick="removeFile(${i})">Ã—</span>
-    </div>`).join('');
-  document.getElementById('preview-strip').innerHTML=upFiles.map(f=>
-    f.ft==='image'?`<img class="p-thumb" src="${f.url}" alt="">`:`<div class="p-thumb-v">${FILE_TYPE_ICONS[f.ft]||'ðŸ“Ž'}</div>`).join('');
-}
-
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// LIGHTBOX & CAROUSEL
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-function findMat(id){for(const ms of Object.values(MATS_CACHE)){const m=ms.find(m=>m.id===id);if(m)return m;}return null;}
-function openLightbox(matId){
-  const m=findMat(matId);if(!m)return;
-  const t=TYPES.find(t=>t.id===m.type);
-  const ct=document.getElementById('lb-content'),info=document.getElementById('lb-info');
-  const first=(m.files||[])[0];
-  if(first?.url){
-    if(first.file_type==='video')ct.innerHTML=`<video class="lb-vid" src="${first.url}" controls autoplay></video>`;
-    else ct.innerHTML=`<img class="lb-img" src="${first.url}" alt="">`;
-    info.textContent=`${t?.label} Â· ${fmtDate(m.date)} Â· ${m.description}`;
-  }else{
-    ct.innerHTML=`<div style="text-align:center;padding:20px"><div style="font-size:70px;margin-bottom:12px">${t?.emoji||'ðŸ“„'}</div><div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px">${t?.label}</div><div style="font-size:13px;color:var(--text2)">${m.description}</div><div style="font-size:12px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 14px;margin-top:10px">Nenhum arquivo enviado ainda.</div></div>`;
-    info.textContent=fmtDate(m.date);
-  }
-  document.getElementById('lb-ov').classList.add('open');
-}
-function closeLightbox(){document.getElementById('lb-ov').classList.remove('open');const v=document.querySelector('#lb-content video');if(v)v.pause();}
-function openCarousel(matId){
-  const m=findMat(matId);if(!m)return;
-  carData={slides:m.files||[],cur:0,type:m.type};renderCarSlide();
-  document.getElementById('car-ov').classList.add('open');
-}
-function renderCarSlide(){
-  const{slides,cur,type}=carData,t=TYPES.find(t=>t.id===type);
+﻿find(t=>t.id===type);
   const slide=document.getElementById('car-slide'),f=slides[cur];
   if(f?.url){
     if(f.file_type==='video')slide.innerHTML=`<video src="${f.url}" controls style="width:100%;height:100%;object-fit:contain;outline:none"></video>`;
     else slide.innerHTML=`<img src="${f.url}" style="width:100%;height:100%;object-fit:contain">`;
   }else{
-    slide.innerHTML=`<div style="text-align:center;padding:20px;color:var(--text3)"><div style="font-size:46px;margin-bottom:9px">${t?.emoji||'ðŸ–¼'}</div><div style="font-size:13px">${f?f.name:`Slide ${cur+1}`}</div></div>`;
+    slide.innerHTML=`<div style="text-align:center;padding:20px;color:var(--text3)"><div style="font-size:46px;margin-bottom:9px">${t?.emoji||'🖼'}</div><div style="font-size:13px">${f?f.name:`Slide ${cur+1}`}</div></div>`;
   }
   document.getElementById('car-ct').textContent=`${cur+1} de ${slides.length}`;
   document.getElementById('car-dots').innerHTML=slides.map((_,i)=>`<span class="${i===cur?'on':''}"></span>`).join('');
@@ -81,27 +12,27 @@ function renderCarSlide(){
 function carNav(d){carData.cur=Math.max(0,Math.min(carData.slides.length-1,carData.cur+d));renderCarSlide();}
 function closeCarousel(){document.getElementById('car-ov').classList.remove('open');}
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // EXPORT
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 function startExport(type){
   closeOv('ov-export-choice');
   const ms=MATS_CACHE[curClient.id]||[];
   const k=getKPIs();
   const isMonth=activeP==='month'||activeP==='lastmonth';
-  const reportTitle=isMonth?'RelatÃ³rio Mensal':'RelatÃ³rio Semanal';
+  const reportTitle=isMonth?'Relatório Mensal':'Relatório Semanal';
   document.getElementById('content').innerHTML=renderExportPreview(k,ms,reportTitle,type);
 }
 function renderExportPreview(k,ms,reportTitle,exportType){
-  const logoHtml=systemLogoUrl?`<img src="${systemLogoUrl}" style="width:100%;height:100%;object-fit:cover">`:'ðŸ¼';
-  const clientLogoHtml=curClient.logo_url?`<img src="${curClient.logo_url}" style="width:100%;height:100%;object-fit:cover">`:'ðŸ¢';
+  const logoHtml=systemLogoUrl?`<img src="${systemLogoUrl}" style="width:100%;height:100%;object-fit:cover">`:'🐼';
+  const clientLogoHtml=curClient.logo_url?`<img src="${curClient.logo_url}" style="width:100%;height:100%;object-fit:cover">`:'🏢';
   return`<div class="exp-wrap">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
-      <div><div style="font-size:11px;color:var(--text3);margin-bottom:2px">Preview Â· ${exportType==='admin'?'Admin':'Cliente'}</div><div style="font-size:16px;font-weight:600">${curClient.name}</div></div>
+      <div><div style="font-size:11px;color:var(--text3);margin-bottom:2px">Preview · ${exportType==='admin'?'Admin':'Cliente'}</div><div style="font-size:16px;font-weight:600">${curClient.name}</div></div>
       <div style="display:flex;gap:7px;flex-wrap:wrap">
-        <button class="btn btn-ghost btn-sm" onclick="showScreen('client')">â† Voltar</button>
+        <button class="btn btn-ghost btn-sm" onclick="showScreen('client')">← Voltar</button>
         <button class="btn ${exportType==='admin'?'btn-indigo':'btn-green'}" id="btn-gen-pdf" onclick="generatePDF('${exportType}')">
-          â¬‡ ${exportType==='admin'?'PDF Admin':'PDF Cliente'}
+          ⬇ ${exportType==='admin'?'PDF Admin':'PDF Cliente'}
         </button>
       </div>
     </div>
@@ -124,11 +55,11 @@ function renderExportPreview(k,ms,reportTitle,exportType){
       ${exportType==='admin'?renderAdminBreakdownPreview(ms):''}
       <div class="pdf-sec"><h4>Materiais (${ms.length})</h4>
         <div class="pdf-gal">
-          ${ms.slice(0,8).map(m=>{const f=(m.files||[])[0];if(f?.url&&f.file_type==='image')return`<div class="pdf-thumb"><img src="${f.url}"></div>`;return`<div class="pdf-thumb">${TE[m.type]||'ðŸ“„'}</div>`;}).join('')}
+          ${ms.slice(0,8).map(m=>{const f=(m.files||[])[0];if(f?.url&&f.file_type==='image')return`<div class="pdf-thumb"><img src="${f.url}"></div>`;return`<div class="pdf-thumb">${TE[m.type]||'📄'}</div>`;}).join('')}
           ${ms.length===0?'<div style="grid-column:1/-1;text-align:center;color:var(--text3);font-size:13px;padding:14px">Nenhum material ainda</div>':''}
         </div>
       </div>
-      <div style="padding:12px 20px;text-align:center;font-size:11px;color:var(--text3)">Gerado por Panda Reports Â· ${new Date().toLocaleDateString('pt-BR')} Â· panda.ag</div>
+      <div style="padding:12px 20px;text-align:center;font-size:11px;color:var(--text3)">Gerado por Panda Reports · ${new Date().toLocaleDateString('pt-BR')} · panda.ag</div>
     </div>
   </div>`;
 }
@@ -144,7 +75,7 @@ function renderAdminBreakdownPreview(ms){
           ${name} <span style="font-size:11px;color:var(--text3);font-weight:400">${mats.length} demanda${mats.length!==1?'s':''}</span>
         </div>
         <div style="display:flex;gap:5px;flex-wrap:wrap">
-          ${mats.map(m=>{const t=TYPES.find(t=>t.id===m.type);return`<span style="font-size:11px;padding:2px 8px;border-radius:5px;background:var(--bg4);color:var(--text2);border:1px solid var(--border)">${t?.emoji} ${t?.label} Â· ${fmtDateS(m.date)}</span>`;}).join('')}
+          ${mats.map(m=>{const t=TYPES.find(t=>t.id===m.type);return`<span style="font-size:11px;padding:2px 8px;border-radius:5px;background:var(--bg4);color:var(--text2);border:1px solid var(--border)">${t?.emoji} ${t?.label} · ${fmtDateS(m.date)}</span>`;}).join('')}
         </div>
       </div>`;}).join('')}
   </div>`;
@@ -152,14 +83,14 @@ function renderAdminBreakdownPreview(ms){
 
 async function generatePDF(exportType){
   const btn=document.getElementById('btn-gen-pdf');
-  if(btn){btn.innerHTML='<span class="spinner spinner-dark"></span> Gerandoâ€¦';btn.disabled=true;}
-  showToast('Gerando PDFâ€¦');
+  if(btn){btn.innerHTML='<span class="spinner spinner-dark"></span> Gerando…';btn.disabled=true;}
+  showToast('Gerando PDF…');
   try{
     const{jsPDF}=window.jspdf;
     const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
     const W=210,H=297,ms=MATS_CACHE[curClient.id]||[],k=getKPIs();
     const isMonth=activeP==='month'||activeP==='lastmonth';
-    const reportTitle=isMonth?'RelatÃ³rio Mensal':'RelatÃ³rio Semanal';
+    const reportTitle=isMonth?'Relatório Mensal':'Relatório Semanal';
 
     // CAPA
     doc.setFillColor(13,13,13);doc.rect(0,0,W,H,'F');
@@ -174,7 +105,7 @@ async function generatePDF(exportType){
     doc.text(curClient.name,W/2,ly+20,{align:'center'});
     doc.setTextColor(85,85,85);doc.setFontSize(9);
     doc.text(new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'}),W/2,ly+29,{align:'center'});
-    if(exportType==='admin'){doc.setFillColor(99,102,241);doc.roundedRect(W/2-20,ly+37,40,8,3,3,'F');doc.setTextColor(255,255,255);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text('ADMIN â€” USO INTERNO',W/2,ly+42.5,{align:'center'});}
+    if(exportType==='admin'){doc.setFillColor(99,102,241);doc.roundedRect(W/2-20,ly+37,40,8,3,3,'F');doc.setTextColor(255,255,255);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text('ADMIN — USO INTERNO',W/2,ly+42.5,{align:'center'});}
 
     // RESUMO
     doc.addPage();doc.setFillColor(13,13,13);doc.rect(0,0,W,H,'F');
@@ -236,4 +167,98 @@ async function generatePDF(exportType){
           if(gi&&gi%cols===0){gy+=th+4;gx=14;}
           if(gy+th>285){doc.addPage();doc.setFillColor(13,13,13);doc.rect(0,0,W,H,'F');doc.setFillColor(107,175,69);doc.rect(0,0,W,2,'F');gy=14;gx=14;}
           doc.setFillColor(22,22,22);doc.roundedRect(gx,gy,tw,th,3,3,'F');
-          try{const d=await toBase64(m.files[0].url);doc.addImage(d,'JPEG
+          try{const d=await toBase64(m.files[0].url);doc.addImage(d,'JPEG',gx,gy,tw,th);}catch(e){}
+          gx+=tw+4;gi++;
+        }
+      }
+    }
+
+    // FOOTER
+    const pages=doc.internal.getNumberOfPages();
+    for(let i=1;i<=pages;i++){
+      doc.setPage(i);
+      doc.setFillColor(fc[0],fc[1],fc[2]);doc.rect(0,H-2,W,2,'F');
+      doc.setTextColor(55,55,55);doc.setFontSize(7);doc.setFont('helvetica','normal');
+      doc.text(`Panda Reports · ${new Date().toLocaleDateString('pt-BR')} · panda.ag`,W/2,H-6,{align:'center'});
+      doc.text(`${i}/${pages}`,W-12,H-6,{align:'right'});
+    }
+    const suffix=exportType==='admin'?'admin':'cliente';
+    doc.save(`panda-report-${suffix}-${curClient.name.replace(/\s+/g,'-').toLowerCase()}-${new Date().toISOString().slice(0,10)}.pdf`);
+    showToast('PDF gerado com sucesso!');
+  }catch(e){console.error(e);showToast('Erro ao gerar PDF',true);}
+  finally{if(btn){btn.innerHTML=`⬇ ${exportType==='admin'?'PDF Admin':'PDF Cliente'}`;btn.disabled=false;}}
+}
+function hexRGB(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function colorForType(t){return{post:'#6BAF45',carousel:'#3b82f6',video:'#ef4444',story:'#a855f7',reels:'#f97316',identity:'#eab308'}[t]||'#888';}
+function toBase64(url){return new Promise((res,rej)=>{const img=new Image();img.crossOrigin='anonymous';img.onload=()=>{const c=document.createElement('canvas');c.width=img.width;c.height=img.height;c.getContext('2d').drawImage(img,0,0);res(c.toDataURL('image/jpeg',0.85));};img.onerror=rej;img.src=url;});}
+function dataURLtoBlob(dataURL){const arr=dataURL.split(','),mime=arr[0].match(/:(.*?);/)[1];const bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);while(n--)u8[n]=bstr.charCodeAt(n);return new Blob([u8],{type:mime});}
+
+// ═══════════════════════════════════════════════════
+// PUBLIC BRIEFING FORM (sem login)
+// ═══════════════════════════════════════════════════
+async function initPublicForm(clientId){
+  document.getElementById('scr-login').style.display='none';
+  document.getElementById('sidebar').style.display='none';
+  document.getElementById('main').style.display='none';
+  document.getElementById('scr-public-form').style.display='block';
+  const logoSaved=localStorage.getItem('panda_logo');
+  if(logoSaved)systemLogoUrl=logoSaved;
+
+  const{data:client,error}=await db.from('clients').select('*').eq('id',clientId).single();
+  if(error||!client){
+    document.getElementById('pf-wrap-content').innerHTML=`<div class="pf-header" style="margin-top:60px"><div class="pf-logo">🐼</div><h1>Link inválido</h1><p>Este formulário de pedido não foi encontrado. Confira o link com a agência.</p></div>`;
+    return;
+  }
+  PF_CLIENT=client;
+  const{data:orgs}=await db.from('org_logos').select('*').eq('client_id',clientId).order('name',{ascending:true});
+  PF_ORGS=orgs||[];
+  PF_STEP=1;
+  renderPublicForm();
+}
+
+function pfHeaderHtml(){
+  const logoHtml=systemLogoUrl?`<img src="${systemLogoUrl}">`:'🐼';
+  return`<div class="pf-header">
+    <div class="pf-logo">${logoHtml}</div>
+    <h1>Solicitação de Material</h1>
+    <p>${PF_CLIENT.name}</p>
+  </div>
+  <div class="pf-progress-wrap">
+    <div class="pf-progress-label">Etapa ${PF_STEP} de ${PF_TOTAL_STEPS}</div>
+    <div class="pf-progress-bar"><div class="pf-progress-fill" style="width:${(PF_STEP/PF_TOTAL_STEPS)*100}%"></div></div>
+  </div>`;
+}
+
+function renderPublicForm(){
+  const wrap=document.getElementById('pf-wrap-content');
+  let stepHtml='';
+  if(PF_STEP===1)stepHtml=pfStep1();
+  else if(PF_STEP===2)stepHtml=pfStep2();
+  else if(PF_STEP===3)stepHtml=pfStep3();
+  else if(PF_STEP===4)stepHtml=pfStep4();
+  else if(PF_STEP===5)stepHtml=pfStep5();
+  else if(PF_STEP===6)stepHtml=pfStep6();
+  wrap.innerHTML=pfHeaderHtml()+`<div class="pf-card">${stepHtml}</div>`;
+  pfBindEvents();
+}
+
+function pfStep1(){
+  return`
+    <div class="pf-step-title">Quem está solicitando?</div>
+    <div class="pf-step-sub">Precisamos saber quem fazer contato em caso de dúvidas.</div>
+    <div class="pf-field" id="f-requester_name">
+      <label>Seu nome <span class="req">*</span></label>
+      <input type="text" id="pf-requester_name" value="${PF_DATA.requester_name}" placeholder="Ex: Maria Souza">
+      <div class="pf-err-msg">Preencha seu nome.</div>
+    </div>
+    <div class="pf-field" id="f-requester_role">
+      <label>Seu cargo / função <span class="req">*</span></label>
+      <input type="text" id="pf-requester_role" value="${PF_DATA.requester_role}" placeholder="Ex: Recepcionista, Gerente, Sócio...">
+      <div class="pf-err-msg">Preencha seu cargo ou função.</div>
+    </div>
+    <div class="pf-field" id="f-requester_contact">
+      <label>Telefone ou e-mail para contato <span class="req">*</span></label>
+      <input type="text" id="pf-requester_contact" value="${PF_DATA.requester_contact}" placeholder="Ex: (77) 99999-9999">
+      <div class="pf-err-msg">Preencha um telefone ou e-mail.</div>
+    </div>
+    <div class="pf

@@ -15,49 +15,49 @@
 <div id="scr-login">
   <div class="login-card">
     <div class="login-logo">
-      <div class="li" id="login-logo-icon">ðŸ¼</div>
+      <div class="li" id="login-logo-icon">🐼</div>
       <h1>Panda <em>Reports</em></h1>
-      <p>Plataforma de relatÃ³rios premium</p>
+      <p>Plataforma de relatórios premium</p>
     </div>
     <!-- Saved session card -->
     <div class="saved-session" id="saved-session" onclick="loginWithSaved()">
-      <div class="ss-label">âœ“ SessÃ£o salva</div>
+      <div class="ss-label">✓ Sessão salva</div>
       <div class="ss-email" id="saved-email"></div>
       <div class="ss-hint">Clique para entrar automaticamente</div>
     </div>
     <div class="login-err" id="login-err"></div>
     <div class="fg"><label>E-mail</label><input type="email" id="l-email" placeholder="seu@email.com" autocomplete="email"></div>
-    <div class="fg"><label>Senha</label><input type="password" id="l-pass" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="current-password"></div>
+    <div class="fg"><label>Senha</label><input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password"></div>
     <label class="remember-row">
       <input type="checkbox" id="remember-me" checked>
       <span>Lembrar minha senha neste dispositivo</span>
     </label>
     <button class="login-btn" id="login-btn" onclick="doLogin()">Entrar na plataforma</button>
-    <div class="login-hint">Panda Agency Â· Plataforma interna</div>
+    <div class="login-hint">Panda Agency · Plataforma interna</div>
   </div>
 </div>
 
 <!-- SIDEBAR -->
 <div id="sidebar">
   <div class="s-logo" onclick="showScreen('dashboard')" title="Dashboard">
-    <div class="s-logo-icon" id="sidebar-logo-icon">ðŸ¼</div>
+    <div class="s-logo-icon" id="sidebar-logo-icon">🐼</div>
     <span class="s-label">Panda <em>Reports</em></span>
   </div>
-  <button class="s-toggle" onclick="toggleSidebar()" id="s-toggle-btn" title="Recolher sidebar">â€¹</button>
+  <button class="s-toggle" onclick="toggleSidebar()" id="s-toggle-btn" title="Recolher sidebar">‹</button>
   <div style="padding:8px 8px 0">
     <div class="c-item" onclick="showScreen('kanban');closeMobileSidebar()" id="nav-kanban-btn" title="Fluxo">
-      <span style="font-size:14px">ðŸ—‚</span>
+      <span style="font-size:14px">🗂</span>
       <span class="c-name s-label">Fluxo</span>
       <span class="c-badge" id="kanban-badge" style="display:none;background:rgba(234,179,8,.2);color:#eab308">0</span>
     </div>
     <div class="c-item" onclick="showScreen('todo');closeMobileSidebar()" id="nav-todo-btn" title="To-Do Semanal">
-      <span style="font-size:14px">âœ…</span>
+      <span style="font-size:14px">✅</span>
       <span class="c-name s-label">To-Do Semanal</span>
     </div>
   </div>
   <div class="s-search">
     <div class="s-search-box">
-      <span style="color:var(--text3);font-size:14px">âŒ•</span>
+      <span style="color:var(--text3);font-size:14px">⌕</span>
       <input type="text" placeholder="Buscar cliente..." oninput="filterClients(this.value)">
     </div>
   </div>
@@ -84,21 +84,21 @@
 <div id="main">
   <div class="topbar">
     <div class="topbar-left">
-      <button class="mob-menu-btn" onclick="openMobileSidebar()">â˜°</button>
+      <button class="mob-menu-btn" onclick="openMobileSidebar()">☰</button>
       <div>
         <div class="tb-title" id="tb-title">Dashboard</div>
-        <div class="tb-period" id="tb-period">VisÃ£o geral</div>
+        <div class="tb-period" id="tb-period">Visão geral</div>
       </div>
     </div>
     <div class="tb-actions">
-      <button class="btn btn-ghost btn-sm" onclick="showScreen('export')" id="btn-export" style="display:none">ðŸ“„ Exportar</button>
-      <button class="icon-btn" onclick="openEditClient()" id="btn-edit" title="Editar cliente" style="display:none">âœ</button>
+      <button class="btn btn-ghost btn-sm" onclick="showScreen('export')" id="btn-export" style="display:none">📄 Exportar</button>
+      <button class="icon-btn" onclick="openEditClient()" id="btn-edit" title="Editar cliente" style="display:none">✏</button>
       <button class="btn btn-green btn-sm" onclick="openUploadModal()" id="btn-upload" style="display:none">+ Adicionar</button>
-      <button class="bell-btn" onclick="openNotifPanel()" title="NotificaÃ§Ãµes" id="bell-btn">
-        ðŸ””
+      <button class="bell-btn" onclick="openNotifPanel()" title="Notificações" id="bell-btn">
+        🔔
         <span class="bell-badge" id="bell-badge"></span>
       </button>
-      <button class="icon-btn" onclick="showScreen('settings')" title="ConfiguraÃ§Ãµes">âš™</button>
+      <button class="icon-btn" onclick="showScreen('settings')" title="Configurações">⚙</button>
     </div>
   </div>
   <div id="content"></div>
@@ -107,20 +107,20 @@
 <!-- UPLOAD MODAL -->
 <div class="overlay" id="ov-upload">
   <div class="modal modal-wide">
-    <div class="mh"><h3>Adicionar material</h3><div class="m-close" onclick="closeOv('ov-upload')">Ã—</div></div>
+    <div class="mh"><h3>Adicionar material</h3><div class="m-close" onclick="closeOv('ov-upload')">×</div></div>
     <div class="mb">
       <div class="type-grid" id="type-grid"></div>
       <div class="dz" id="dropzone" onclick="document.getElementById('file-input').click()" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
-        <div class="dz-ico">â˜</div>
+        <div class="dz-ico">☁</div>
         <p>Arraste arquivos ou clique para selecionar</p>
-        <span id="dz-hint">PNG, JPG, MP4 Â· mÃºltiplos arquivos</span>
+        <span id="dz-hint">PNG, JPG, MP4 · múltiplos arquivos</span>
       </div>
       <input type="file" id="file-input" multiple accept="image/*,video/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.*,application/vnd.ms-*" style="display:none" onchange="onFileSelect(this)">
       <div class="preview-strip" id="preview-strip"></div>
       <div class="dz-files" id="dz-files"></div>
       <div class="upload-progress" id="upload-progress"><div class="upload-progress-bar" id="upload-progress-bar"></div></div>
-      <div class="fg2" style="margin-top:11px"><label>DescriÃ§Ã£o</label><textarea id="up-desc" placeholder="ObservaÃ§Ã£o opcional..." rows="2"></textarea></div>
-      <div class="fg2"><label>Colaborador responsÃ¡vel</label><select id="up-collab"><option value="">â€” Selecionar â€”</option></select></div>
+      <div class="fg2" style="margin-top:11px"><label>Descrição</label><textarea id="up-desc" placeholder="Observação opcional..." rows="2"></textarea></div>
+      <div class="fg2"><label>Colaborador responsável</label><select id="up-collab"><option value="">— Selecionar —</option></select></div>
       <div class="u-actions">
         <button class="btn btn-ghost" onclick="closeOv('ov-upload')">Cancelar</button>
         <button class="btn btn-green" id="btn-save-upload" onclick="submitUpload()">Salvar material</button>
@@ -132,20 +132,20 @@
 <!-- NEW CLIENT -->
 <div class="overlay" id="ov-new-client">
   <div class="modal">
-    <div class="mh"><h3>Novo cliente</h3><div class="m-close" onclick="closeOv('ov-new-client')">Ã—</div></div>
+    <div class="mh"><h3>Novo cliente</h3><div class="m-close" onclick="closeOv('ov-new-client')">×</div></div>
     <div class="mb">
       <div class="fg2"><label>Logo do cliente</label>
         <div class="logo-upload-box" onclick="document.getElementById('nc-logo-input').click()" id="nc-logo-box">
-          <div style="font-size:26px;margin-bottom:5px">ðŸ¢</div>
+          <div style="font-size:26px;margin-bottom:5px">🏢</div>
           <div style="font-size:11px;color:var(--text3)">Clique para enviar logo</div>
         </div>
         <input type="file" id="nc-logo-input" accept="image/*" style="display:none" onchange="previewClientLogo(this,'nc-logo-box','nc-logo-data')">
         <input type="hidden" id="nc-logo-data">
       </div>
       <div class="fg2"><label>Nome do cliente *</label><input type="text" id="nc-name" placeholder="Ex: Instituto Occasio"></div>
-      <div class="fg2"><label>Segmento / nicho</label><input type="text" id="nc-seg" placeholder="Ex: SaÃºde, EducaÃ§Ã£o, Moda..."></div>
-      <div class="fg2"><label>ResponsÃ¡vel na agÃªncia</label><input type="text" id="nc-resp" placeholder="Ex: Ana Lima"></div>
-      <div class="fg2"><label>Cor de identificaÃ§Ã£o</label><div class="color-grid" id="nc-colors"></div></div>
+      <div class="fg2"><label>Segmento / nicho</label><input type="text" id="nc-seg" placeholder="Ex: Saúde, Educação, Moda..."></div>
+      <div class="fg2"><label>Responsável na agência</label><input type="text" id="nc-resp" placeholder="Ex: Ana Lima"></div>
+      <div class="fg2"><label>Cor de identificação</label><div class="color-grid" id="nc-colors"></div></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
         <button class="btn btn-ghost" onclick="closeOv('ov-new-client')">Cancelar</button>
         <button class="btn btn-green" id="btn-create-client" onclick="submitNewClient()">Criar cliente</button>
@@ -157,11 +157,11 @@
 <!-- EDIT CLIENT -->
 <div class="overlay" id="ov-edit-client">
   <div class="modal">
-    <div class="mh"><h3>Editar cliente</h3><div class="m-close" onclick="closeOv('ov-edit-client')">Ã—</div></div>
+    <div class="mh"><h3>Editar cliente</h3><div class="m-close" onclick="closeOv('ov-edit-client')">×</div></div>
     <div class="mb">
       <div class="fg2"><label>Logo do cliente</label>
         <div class="logo-upload-box" onclick="document.getElementById('ec-logo-input').click()" id="ec-logo-box">
-          <div style="font-size:26px;margin-bottom:5px">ðŸ¢</div>
+          <div style="font-size:26px;margin-bottom:5px">🏢</div>
           <div style="font-size:11px;color:var(--text3)">Clique para alterar logo</div>
         </div>
         <input type="file" id="ec-logo-input" accept="image/*" style="display:none" onchange="previewClientLogo(this,'ec-logo-box','ec-logo-data')">
@@ -169,10 +169,10 @@
       </div>
       <div class="fg2"><label>Nome do cliente *</label><input type="text" id="ec-name"></div>
       <div class="fg2"><label>Segmento / nicho</label><input type="text" id="ec-seg"></div>
-      <div class="fg2"><label>ResponsÃ¡vel na agÃªncia</label><input type="text" id="ec-resp"></div>
-      <div class="fg2"><label>Cor de identificaÃ§Ã£o</label><div class="color-grid" id="ec-colors"></div></div>
+      <div class="fg2"><label>Responsável na agência</label><input type="text" id="ec-resp"></div>
+      <div class="fg2"><label>Cor de identificação</label><div class="color-grid" id="ec-colors"></div></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:18px">
-        <button class="btn btn-red btn-sm" onclick="deleteClient()">ðŸ—‘ Excluir cliente</button>
+        <button class="btn btn-red btn-sm" onclick="deleteClient()">🗑 Excluir cliente</button>
         <div style="display:flex;gap:8px">
           <button class="btn btn-ghost" onclick="closeOv('ov-edit-client')">Cancelar</button>
           <button class="btn btn-green" id="btn-save-client" onclick="submitEditClient()">Salvar</button>
@@ -185,10 +185,10 @@
 <!-- NEW COLLAB -->
 <div class="overlay" id="ov-new-collab">
   <div class="modal">
-    <div class="mh"><h3>Novo colaborador</h3><div class="m-close" onclick="closeOv('ov-new-collab')">Ã—</div></div>
+    <div class="mh"><h3>Novo colaborador</h3><div class="m-close" onclick="closeOv('ov-new-collab')">×</div></div>
     <div class="mb">
       <div class="fg2"><label>Nome *</label><input type="text" id="collab-name" placeholder="Ex: Ariel Silva"></div>
-      <div class="fg2"><label>FunÃ§Ã£o</label><input type="text" id="collab-role" placeholder="Ex: Designer, Copywriter..."></div>
+      <div class="fg2"><label>Função</label><input type="text" id="collab-role" placeholder="Ex: Designer, Copywriter..."></div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
         <button class="btn btn-ghost" onclick="closeOv('ov-new-collab')">Cancelar</button>
         <button class="btn btn-indigo" id="btn-create-collab" onclick="submitNewCollab()">Adicionar</button>
@@ -200,17 +200,17 @@
 <!-- EXPORT CHOICE -->
 <div class="overlay" id="ov-export-choice">
   <div class="modal">
-    <div class="mh"><h3>Exportar relatÃ³rio</h3><div class="m-close" onclick="closeOv('ov-export-choice')">Ã—</div></div>
+    <div class="mh"><h3>Exportar relatório</h3><div class="m-close" onclick="closeOv('ov-export-choice')">×</div></div>
     <div class="mb">
       <div class="exp-choice">
         <button class="exp-btn-big client-exp" onclick="startExport('client')">
-          <div class="eb-ico">ðŸ“„</div>
-          <div class="eb-title">ExportaÃ§Ã£o Cliente</div>
-          <div class="eb-desc">RelatÃ³rio visual sem dados de colaboradores</div>
+          <div class="eb-ico">📄</div>
+          <div class="eb-title">Exportação Cliente</div>
+          <div class="eb-desc">Relatório visual sem dados de colaboradores</div>
         </button>
         <button class="exp-btn-big admin-exp" onclick="startExport('admin')">
-          <div class="eb-ico">ðŸ”</div>
-          <div class="eb-title">ExportaÃ§Ã£o Admin</div>
+          <div class="eb-ico">🔐</div>
+          <div class="eb-title">Exportação Admin</div>
           <div class="eb-desc">Demandas separadas por colaborador</div>
         </button>
       </div>
@@ -220,21 +220,21 @@
 
 <!-- CAROUSEL -->
 <div class="car-ov" id="car-ov">
-  <div class="car-close" onclick="closeCarousel()">Ã—</div>
+  <div class="car-close" onclick="closeCarousel()">×</div>
   <div class="car-inner">
     <div class="car-slide" id="car-slide"></div>
     <div class="car-dots" id="car-dots"></div>
     <div class="car-nav">
-      <button onclick="carNav(-1)">â† Anterior</button>
+      <button onclick="carNav(-1)">← Anterior</button>
       <span id="car-ct" style="font-size:12px;color:var(--text3)"></span>
-      <button onclick="carNav(1)">PrÃ³ximo â†’</button>
+      <button onclick="carNav(1)">Próximo →</button>
     </div>
   </div>
 </div>
 
 <!-- LIGHTBOX -->
 <div class="lb-ov" id="lb-ov">
-  <div class="lb-close" onclick="closeLightbox()">Ã—</div>
+  <div class="lb-close" onclick="closeLightbox()">×</div>
   <div id="lb-content"></div>
   <div class="lb-info" id="lb-info"></div>
 </div>
@@ -242,8 +242,8 @@
 <!-- CONFIRM DELETE -->
 <div class="confirm-ov" id="confirm-ov">
   <div class="confirm-box">
-    <h3 id="confirm-title">Confirmar exclusÃ£o</h3>
-    <p id="confirm-msg">Esta aÃ§Ã£o nÃ£o pode ser desfeita.</p>
+    <h3 id="confirm-title">Confirmar exclusão</h3>
+    <p id="confirm-msg">Esta ação não pode ser desfeita.</p>
     <div class="confirm-actions">
       <button class="btn btn-ghost" onclick="closeOv('confirm-ov')">Cancelar</button>
       <button class="btn btn-red" id="confirm-delete-btn">Excluir</button>
@@ -261,23 +261,23 @@
   <div class="pf-wrap" id="pf-wrap-content"></div>
 </div>
 
-<!-- ORG LOGO MODAL (gestÃ£o de logos de secretarias/Ã³rgÃ£os por cliente) -->
+<!-- ORG LOGO MODAL (gestão de logos de secretarias/órgãos por cliente) -->
 <div class="overlay" id="ov-org-logos">
   <div class="modal">
-    <div class="mh"><h3>Logos / Ã“rgÃ£os do cliente</h3><div class="m-close" onclick="closeOv('ov-org-logos')">Ã—</div></div>
+    <div class="mh"><h3>Logos / Órgãos do cliente</h3><div class="m-close" onclick="closeOv('ov-org-logos')">×</div></div>
     <div class="mb">
-      <p style="font-size:12px;color:var(--text3);margin-bottom:14px">Cadastre as secretarias/Ã³rgÃ£os que vÃ£o aparecer como opÃ§Ã£o de logo no formulÃ¡rio de pedido deste cliente.</p>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:14px">Cadastre as secretarias/órgãos que vão aparecer como opção de logo no formulário de pedido deste cliente.</p>
       <div class="org-list" id="org-list"></div>
-      <div class="fg2"><label>Nome do Ã³rgÃ£o / marca</label><input type="text" id="org-name-input" placeholder="Ex: Marca principal, Parceiro, Unidade..."></div>
+      <div class="fg2"><label>Nome do órgão / marca</label><input type="text" id="org-name-input" placeholder="Ex: Marca principal, Parceiro, Unidade..."></div>
       <div class="logo-upload-box" onclick="document.getElementById('org-logo-input').click()" id="org-logo-box" style="margin-bottom:10px">
-        <div style="font-size:24px;margin-bottom:5px">ðŸ›</div>
+        <div style="font-size:24px;margin-bottom:5px">🏛</div>
         <div style="font-size:11px;color:var(--text3)">Clique para enviar a logo (opcional)</div>
       </div>
       <input type="file" id="org-logo-input" accept="image/*" style="display:none" onchange="previewOrgLogo(this)">
       <input type="hidden" id="org-logo-data">
-      <button class="btn btn-indigo" style="width:100%;justify-content:center" id="btn-add-org" onclick="submitNewOrg()">+ Adicionar Ã³rgÃ£o</button>
+      <button class="btn btn-indigo" style="width:100%;justify-content:center" id="btn-add-org" onclick="submitNewOrg()">+ Adicionar órgão</button>
       <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
-        <label style="display:block;font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Link pÃºblico do formulÃ¡rio</label>
+        <label style="display:block;font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Link público do formulário</label>
         <div class="share-link-box">
           <input type="text" id="share-link-input" readonly>
           <button class="btn btn-green btn-sm" onclick="copyShareLink()">Copiar</button>
@@ -290,7 +290,7 @@
 <!-- PEDIDO DETAIL MODAL -->
 <div class="overlay ped-detail-modal" id="ov-ped-detail">
   <div class="modal">
-    <div class="mh"><h3 id="ped-detail-title">Pedido</h3><div class="m-close" onclick="closeOv('ov-ped-detail')">Ã—</div></div>
+    <div class="mh"><h3 id="ped-detail-title">Pedido</h3><div class="m-close" onclick="closeOv('ov-ped-detail')">×</div></div>
     <div class="mb" id="ped-detail-body"></div>
   </div>
 </div>
@@ -298,55 +298,55 @@
 <!-- USER ROLES MODAL (admin only) -->
 <div class="overlay" id="ov-user-roles">
   <div class="modal">
-    <div class="mh"><h3>Gerenciar usuÃ¡rios</h3><div class="m-close" onclick="closeOv('ov-user-roles')">Ã—</div></div>
+    <div class="mh"><h3>Gerenciar usuários</h3><div class="m-close" onclick="closeOv('ov-user-roles')">×</div></div>
     <div class="mb">
-      <p style="font-size:12px;color:var(--text3);margin-bottom:14px">Crie e gerencie quem acessa o sistema. Admin tem acesso total, Membro sÃ³ acessa o Fluxo.</p>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:14px">Crie e gerencie quem acessa o sistema. Admin tem acesso total, Membro só acessa o Fluxo.</p>
       <div id="roles-list"></div>
       <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:16px">
-        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:12px">Adicionar novo usuÃ¡rio</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:12px">Adicionar novo usuário</div>
         <div class="fg2">
           <label>E-mail</label>
           <input type="email" id="role-new-email" placeholder="email@exemplo.com">
         </div>
         <div class="fg2">
           <label>Senha inicial</label>
-          <input type="password" id="role-new-pass" placeholder="MÃ­nimo 6 caracteres">
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">O usuÃ¡rio poderÃ¡ alterar a senha depois</div>
+          <input type="password" id="role-new-pass" placeholder="Mínimo 6 caracteres">
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">O usuário poderá alterar a senha depois</div>
         </div>
         <div class="fg2">
-          <label>FunÃ§Ã£o</label>
+          <label>Função</label>
           <select id="role-new-role" style="padding:9px 12px;background:var(--bg4);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:inherit;outline:none;width:100%">
-            <option value="admin">Admin â€” acesso total</option>
-            <option value="member" selected>Membro â€” somente Fluxo</option>
+            <option value="admin">Admin — acesso total</option>
+            <option value="member" selected>Membro — somente Fluxo</option>
           </select>
         </div>
-        <button class="btn btn-green" id="btn-add-user" style="width:100%;justify-content:center" onclick="addUserRole()">+ Criar usuÃ¡rio</button>
+        <button class="btn btn-green" id="btn-add-user" style="width:100%;justify-content:center" onclick="addUserRole()">+ Criar usuário</button>
       </div>
       <div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-top:10px;font-size:12px;color:var(--text3)">
-        ðŸ’¡ Se o usuÃ¡rio jÃ¡ existe no sistema, apenas a funÃ§Ã£o serÃ¡ atualizada.
+        💡 Se o usuário já existe no sistema, apenas a função será atualizada.
       </div>
     </div>
   </div>
 </div>
 
-<!-- NEW KANBAN CARD (formulÃ¡rio Ãºnico) -->
+<!-- NEW KANBAN CARD (formulário único) -->
 <div class="overlay" id="ov-new-kbcard">
   <div class="modal modal-wide">
-    <div class="mh"><h3>Nova demanda</h3><div class="m-close" onclick="closeOv('ov-new-kbcard')">Ã—</div></div>
+    <div class="mh"><h3>Nova demanda</h3><div class="m-close" onclick="closeOv('ov-new-kbcard')">×</div></div>
     <div class="mb">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="fg2"><label>Cliente *</label><select id="kb-new-client"></select></div>
         <div class="fg2"><label>Coluna inicial</label><select id="kb-new-column"></select></div>
       </div>
-      <div class="fg2"><label>TÃ­tulo da demanda *</label><input type="text" id="kb-new-title" placeholder="Ex: Post de aniversÃ¡rio da empresa"></div>
-      <div class="fg2"><label>DescriÃ§Ã£o <span style="font-weight:400;color:var(--text3);font-size:11px">opcional</span></label><textarea id="kb-new-desc" placeholder="Detalhes, referÃªncias, orientaÃ§Ãµes para quem vai executar..." rows="3" style="min-height:80px;resize:none;overflow:hidden" oninput="autoGrow(this)"></textarea></div>
-      <div class="fg2"><label>Atribuir para <span style="font-weight:400;color:var(--text3);font-size:11px">opcional</span></label><select id="kb-new-collab"><option value="">â€” Sem atribuiÃ§Ã£o â€”</option></select></div>
+      <div class="fg2"><label>Título da demanda *</label><input type="text" id="kb-new-title" placeholder="Ex: Post de aniversário da empresa"></div>
+      <div class="fg2"><label>Descrição <span style="font-weight:400;color:var(--text3);font-size:11px">opcional</span></label><textarea id="kb-new-desc" placeholder="Detalhes, referências, orientações para quem vai executar..." rows="3" style="min-height:80px;resize:none;overflow:hidden" oninput="autoGrow(this)"></textarea></div>
+      <div class="fg2"><label>Atribuir para <span style="font-weight:400;color:var(--text3);font-size:11px">opcional</span></label><select id="kb-new-collab"><option value="">— Sem atribuição —</option></select></div>
       <div class="fg2">
         <label>Anexos <span style="font-weight:400;color:var(--text3);font-size:11px">opcional</span></label>
         <div class="dz" id="kb-new-dropzone" onclick="document.getElementById('kb-new-file-input').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="kbNewDrop(event)">
-          <div class="dz-ico">â˜</div>
+          <div class="dz-ico">☁</div>
           <p>Arraste arquivos ou clique para selecionar</p>
-          <span>Imagens, vÃ­deos ou documentos</span>
+          <span>Imagens, vídeos ou documentos</span>
         </div>
         <input type="file" id="kb-new-file-input" multiple accept="*/*" style="display:none" onchange="kbNewFileSelect(this)">
         <div class="preview-strip" id="kb-new-preview"></div>
@@ -363,7 +363,7 @@
 <!-- KANBAN CARD DETAIL -->
 <div class="overlay kb-detail-modal" id="ov-kbcard-detail">
   <div class="modal">
-    <div class="mh"><h3 id="kbd-title">Demanda</h3><div class="m-close" onclick="closeOv('ov-kbcard-detail')">Ã—</div></div>
+    <div class="mh"><h3 id="kbd-title">Demanda</h3><div class="m-close" onclick="closeOv('ov-kbcard-detail')">×</div></div>
     <div class="mb" id="kbd-body"></div>
   </div>
 </div>
@@ -373,13 +373,13 @@
   <div class="att-viewer-top">
     <span class="att-viewer-name" id="att-viewer-name"></span>
     <div class="att-viewer-actions">
-      <a id="att-viewer-download" class="btn btn-green btn-sm" download target="_blank">â¬‡ Salvar</a>
-      <button class="icon-btn" onclick="closeAttViewer()" title="Fechar">Ã—</button>
+      <a id="att-viewer-download" class="btn btn-green btn-sm" download target="_blank">⬇ Salvar</a>
+      <button class="icon-btn" onclick="closeAttViewer()" title="Fechar">×</button>
     </div>
   </div>
-  <button class="att-viewer-prev" id="att-prev" onclick="attNav(-1)">â€¹</button>
+  <button class="att-viewer-prev" id="att-prev" onclick="attNav(-1)">‹</button>
   <div class="att-viewer-main" id="att-viewer-main"></div>
-  <button class="att-viewer-next" id="att-next" onclick="attNav(1)">â€º</button>
+  <button class="att-viewer-next" id="att-next" onclick="attNav(1)">›</button>
   <div class="att-viewer-strip" id="att-viewer-strip"></div>
 </div>
 
@@ -387,14 +387,14 @@
 <div class="notif-overlay" id="notif-overlay" onclick="closeNotifPanel()"></div>
 <div class="notif-panel" id="notif-panel">
   <div class="notif-head">
-    <h3>ðŸ”” NotificaÃ§Ãµes</h3>
+    <h3>🔔 Notificações</h3>
     <div class="notif-head-actions">
       <button class="btn btn-ghost btn-sm" onclick="markAllRead()">Marcar todas lidas</button>
-      <button class="icon-btn" onclick="closeNotifPanel()">Ã—</button>
+      <button class="icon-btn" onclick="closeNotifPanel()">×</button>
     </div>
   </div>
   <div class="notif-body" id="notif-body">
-    <div class="notif-empty"><div class="ico">ðŸ””</div><p>Nenhuma notificaÃ§Ã£o</p></div>
+    <div class="notif-empty"><div class="ico">🔔</div><p>Nenhuma notificação</p></div>
   </div>
 </div>
 
@@ -404,41 +404,41 @@
 <!-- TODO NEW TASK MODAL -->
 <div class="overlay" id="ov-new-todo">
   <div class="modal">
-    <div class="mh"><h3 id="todo-modal-title">Nova tarefa</h3><div class="m-close" onclick="closeOv('ov-new-todo')">Ã—</div></div>
+    <div class="mh"><h3 id="todo-modal-title">Nova tarefa</h3><div class="m-close" onclick="closeOv('ov-new-todo')">×</div></div>
     <div class="mb">
       <div class="fg2"><label>Tarefa *</label><input type="text" id="todo-title" placeholder="Ex: Postar no Instagram do cliente X"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="fg2"><label>Dia da semana</label>
           <select id="todo-day">
             <option value="1">Segunda-feira</option>
-            <option value="2">TerÃ§a-feira</option>
+            <option value="2">Terça-feira</option>
             <option value="3">Quarta-feira</option>
             <option value="4">Quinta-feira</option>
             <option value="5">Sexta-feira</option>
-            <option value="6">SÃ¡bado</option>
+            <option value="6">Sábado</option>
             <option value="7">Domingo</option>
           </select>
         </div>
-        <div class="fg2"><label>HorÃ¡rio <span style="font-weight:400;color:var(--text3);font-size:11px">opcional</span></label>
+        <div class="fg2"><label>Horário <span style="font-weight:400;color:var(--text3);font-size:11px">opcional</span></label>
           <input type="time" id="todo-time">
         </div>
       </div>
       <div class="fg2"><label>Cliente <span style="font-weight:400;color:var(--text3);font-size:11px">opcional</span></label>
-        <select id="todo-client"><option value="">â€” Nenhum â€”</option></select>
+        <select id="todo-client"><option value="">— Nenhum —</option></select>
       </div>
       <div class="fg2"><label>Atribuir para <span style="font-weight:400;color:var(--text3);font-size:11px">opcional</span></label>
-        <select id="todo-assigned"><option value="">â€” Sem atribuiÃ§Ã£o â€”</option></select>
+        <select id="todo-assigned"><option value="">— Sem atribuição —</option></select>
       </div>
       <div style="background:var(--bg3);border:1.5px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">
         <div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">ðŸ”„ Demanda recorrente</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px">🔄 Demanda recorrente</div>
           <div style="font-size:11px;color:var(--text3)">Aparece automaticamente toda semana</div>
         </div>
         <div class="tog" id="todo-recurring-tog" onclick="this.classList.toggle('on')"></div>
       </div>
       <input type="hidden" id="todo-editing-id">
       <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:4px">
-        <button class="btn btn-red btn-sm" id="btn-delete-todo" onclick="deleteTodoItem()" style="display:none">ðŸ—‘ Excluir</button>
+        <button class="btn btn-red btn-sm" id="btn-delete-todo" onclick="deleteTodoItem()" style="display:none">🗑 Excluir</button>
         <div style="display:flex;gap:8px;margin-left:auto">
           <button class="btn btn-ghost" onclick="closeOv('ov-new-todo')">Cancelar</button>
           <button class="btn btn-green" id="btn-save-todo" onclick="submitTodo()">Salvar tarefa</button>
@@ -448,16 +448,6 @@
   </div>
 </div>
 
-<script src="js/config.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/clients.js"></script>
-<script src="js/export.js"></script>
-<script src="js/briefings.js"></script>
-<script src="js/kanban.js"></script>
-<script src="js/notifications.js"></script>
-<script src="js/todo.js"></script>
-<script src="js/settings.js"></script>
-<script src="js/utils.js"></script>
+<script src="js/config.js"></script><script src="js/auth.js"></script><script src="js/clients.js"></script><script src="js/export.js"></script><script src="js/briefings.js"></script><script src="js/kanban.js"></script><script src="js/notifications.js"></script><script src="js/todo.js"></script><script src="js/settings.js"></script><script src="js/utils.js"></script>
 </body>
 </html>
-

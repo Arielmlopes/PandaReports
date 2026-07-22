@@ -1,18 +1,4 @@
-﻿â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// SIDEBAR TOGGLE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-function toggleSidebar(){
-  sidebarCollapsed=!sidebarCollapsed;
-  const sb=document.getElementById('sidebar');
-  const btn=document.getElementById('s-toggle-btn');
-  sb.classList.toggle('collapsed',sidebarCollapsed);
-  btn.textContent=sidebarCollapsed?'â€º':'â€¹';
-  btn.title=sidebarCollapsed?'Expandir sidebar':'Recolher sidebar';
-  localStorage.setItem('sidebar_collapsed',sidebarCollapsed?'1':'0');
-}
-function initSidebarState(){
-  const saved=localStorage.getItem('sidebar_collapsed');
-  if(saved==='1'){sidebarCollapsed=true;document.getElementById('sidebar').classList.add('collapsed');document.getElementById('s-toggle-btn').textContent='â€º';}
+﻿getElementById('s-toggle-btn').textContent='›';}
 }
 
 // MOBILE SIDEBAR
@@ -25,9 +11,9 @@ function closeMobileSidebar(){
   document.getElementById('mob-overlay').classList.remove('visible');
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // LOGO
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 function loadSystemLogo(){
   const saved=localStorage.getItem('panda_logo');
   if(saved){systemLogoUrl=saved;updateLogoDisplays();}
@@ -36,13 +22,13 @@ function updateLogoDisplays(){
   ['sidebar-logo-icon','login-logo-icon'].forEach(id=>{
     const el=document.getElementById(id);if(!el)return;
     if(systemLogoUrl)el.innerHTML=`<img src="${systemLogoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:5px">`;
-    else el.innerHTML='ðŸ¼';
+    else el.innerHTML='🐼';
   });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // SAVED CREDENTIALS (localStorage)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 function loadSavedCredentials(){
   const saved=localStorage.getItem('panda_creds');
   if(!saved)return;
@@ -75,15 +61,15 @@ async function loginWithSaved(){
   }catch(e){}
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // AUTH
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 async function doLogin(){
   const email=document.getElementById('l-email').value.trim();
   const pass=document.getElementById('l-pass').value;
   const err=document.getElementById('login-err'),btn=document.getElementById('login-btn');
   if(!email||!pass){showErr('Preencha e-mail e senha');return}
-  btn.innerHTML='<span class="spinner spinner-dark"></span> Entrandoâ€¦';btn.disabled=true;
+  btn.innerHTML='<span class="spinner spinner-dark"></span> Entrando…';btn.disabled=true;
   err.style.display='none';
   const{data,error}=await db.auth.signInWithPassword({email,password:pass});
   if(error){showErr('E-mail ou senha incorretos');btn.innerHTML='Entrar na plataforma';btn.disabled=false;return}
@@ -125,9 +111,9 @@ async function loadUserRoles(){
   USER_ROLES=error?[]:(data||[]);
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 // ROTEAMENTO (persiste a tela atual no refresh)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════
 function setRoute(hash){
   if(location.hash!==hash)history.replaceState(null,'','#'+hash);
 }
@@ -150,4 +136,45 @@ async function restoreRoute(){
   showScreen('dashboard');
 }
 window.addEventListener('DOMContentLoaded',async()=>{
-  const params=new URLSearchParams(locatio
+  const params=new URLSearchParams(location.search);
+  const formClientId=params.get('form');
+  if(formClientId){
+    await initPublicForm(formClientId);
+    return;
+  }
+  loadSystemLogo();loadSavedCredentials();
+  const{data}=await db.auth.getSession();
+  if(data.session){curUser=data.session.user;await resolveUserRole(data.session.user.email);enterApp();}
+});
+
+// ═══════════════════════════════════════════════════
+// CLIENTS
+// ═══════════════════════════════════════════════════
+async function loadClients(){
+  const{data,error}=await db.from('clients').select('*').order('created_at',{ascending:true});
+  if(error){showToast('Erro ao carregar clientes',true);return}
+  CLIENTS=data||[];renderSidebar();
+}
+async function submitNewClient(){
+  const name=document.getElementById('nc-name').value.trim();
+  if(!name){showToast('Informe o nome',true);return}
+  const btn=document.getElementById('btn-create-client');
+  btn.innerHTML='<span class="spinner spinner-dark"></span>';btn.disabled=true;
+  let logoUrl=null;
+  const logoData=document.getElementById('nc-logo-data').value;
+  if(logoData){
+    const blob=dataURLtoBlob(logoData);
+    const path=`logos/client_${Date.now()}.jpg`;
+    const{error:upErr}=await db.storage.from(BUCKET).upload(path,blob,{upsert:true,contentType:'image/jpeg'});
+    if(!upErr){const{data:ud}=db.storage.from(BUCKET).getPublicUrl(path);logoUrl=ud.publicUrl;}
+  }
+  const{data,error}=await db.from('clients').insert({
+    name,color:ncColor,seg:document.getElementById('nc-seg').value.trim(),
+    resp:document.getElementById('nc-resp').value.trim(),logo_url:logoUrl
+  }).select().single();
+  btn.innerHTML='Criar cliente';btn.disabled=false;
+  if(error){showToast('Erro ao criar cliente',true);return}
+  CLIENTS.push(data);closeOv('ov-new-client');renderSidebar();showToast(`Cliente "${name}" criado!`);
+}
+async function submitEditClient(){
+  const name=docume
