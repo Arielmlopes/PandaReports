@@ -49,21 +49,27 @@ export default function TodoPage() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('board')
+  const [scope, setScope] = useState('team') // 'team' | 'mine'
   const [modal, setModal] = useState({ open: false, editing: null, dayNum: 1 })
 
   const loadItems = useCallback(async () => {
     setLoading(true)
     const wStr = dateStr(weekDate)
     const prevWStr = dateStr(addDays(weekDate, -7))
-    const { data: curr } = await supabase.from('todo_items').select('*').eq('week_date', wStr).order('position')
-    const { data: prevRec } = await supabase.from('todo_items').select('*').eq('week_date', prevWStr).eq('is_recurring', true)
+
+    const applyScope = (q) => scope === 'mine'
+      ? q.eq('is_private', true).eq('owner_email', user?.email || '')
+      : q.or('is_private.is.false,is_private.is.null')
+
+    const { data: curr } = await applyScope(supabase.from('todo_items').select('*').eq('week_date', wStr)).order('position')
+    const { data: prevRec } = await applyScope(supabase.from('todo_items').select('*').eq('week_date', prevWStr).eq('is_recurring', true))
     let all = curr || []
     // Propagate recurring from previous week
     if (prevRec?.length) {
       const toCreate = []
       for (const t of prevRec) {
         if (!all.find(e => e.is_recurring && e.title === t.title && e.day_of_week === t.day_of_week)) {
-          toCreate.push({ title:t.title, day_of_week:t.day_of_week, client_id:t.client_id, assigned_email:t.assigned_email, task_time:t.task_time, is_recurring:true, week_date:wStr, completed:false, position:t.position })
+          toCreate.push({ title:t.title, day_of_week:t.day_of_week, client_id:t.client_id, assigned_email:t.assigned_email, task_time:t.task_time, is_recurring:true, week_date:wStr, completed:false, position:t.position, is_private:t.is_private||false, owner_email:t.owner_email||null })
         }
       }
       if (toCreate.length) {
@@ -73,7 +79,7 @@ export default function TodoPage() {
     }
     setItems(all)
     setLoading(false)
-  }, [weekDate])
+  }, [weekDate, scope, user?.email])
 
   useEffect(() => { loadItems() }, [loadItems])
 
@@ -108,6 +114,13 @@ export default function TodoPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {/* Scope tabs */}
+      <div className="flex items-center gap-2 mb-3 flex-shrink-0">
+        <button onClick={() => setScope('team')} className={`chip ${scope==='team'?'chip-active':'chip-inactive'}`}>🏢 Equipe</button>
+        <button onClick={() => setScope('mine')} className={`chip ${scope==='mine'?'chip-active':'chip-inactive'}`}>🔒 Meu To-Do</button>
+        {scope === 'mine' && <span className="text-[11px] text-text-3">Só você vê essas tarefas</span>}
+      </div>
+
       {/* Tabs */}
       <div className="flex items-center gap-3 mb-4 flex-wrap flex-shrink-0">
         <div className="flex gap-2">
@@ -119,7 +132,7 @@ export default function TodoPage() {
           <button onClick={() => setWeekDate(d => addDays(d, -7))} className="w-7 h-7 bg-bg-3 border border-border rounded-lg flex items-center justify-center text-text-2 hover:text-text"><ChevronLeft size={14}/></button>
           <span className="text-sm font-semibold whitespace-nowrap">{fmt(mon)} – {fmt(sun)}</span>
           <button onClick={() => setWeekDate(d => addDays(d, 7))} className="w-7 h-7 bg-bg-3 border border-border rounded-lg flex items-center justify-center text-text-2 hover:text-text"><ChevronRight size={14}/></button>
-          <Button variant="green" size="sm" onClick={() => setModal({ open:true, editing:null, dayNum:1 })}><Plus size={14}/> Nova tarefa</Button>
+          <Button variant="green" size="sm" onClick={() => setModal({ open:true, editing:null, dayNum:1 })}><Plus size={14}/> {scope==='mine' ? 'Nova tarefa pessoal' : 'Nova tarefa'}</Button>
         </div>
       </div>
 
@@ -211,7 +224,7 @@ export default function TodoPage() {
 
       {/* Modal */}
       <TodoModal open={modal.open} editing={modal.editing} defaultDay={modal.dayNum} clients={clients} collaborators={collaborators}
-        weekDate={weekDate}
+        weekDate={weekDate} scope={scope} user={user}
         onClose={() => setModal(p => ({...p, open:false, editing:null}))}
         onSaved={(item) => {
           setItems(p => modal.editing ? p.map(i => i.id===item.id?item:i) : [...p, item])
@@ -223,7 +236,7 @@ export default function TodoPage() {
   )
 }
 
-function TodoModal({ open, editing, defaultDay, clients, collaborators, weekDate, onClose, onSaved, onDeleted }) {
+function TodoModal({ open, editing, defaultDay, clients, collaborators, weekDate, scope, user, onClose, onSaved, onDeleted }) {
   const { showToast } = useApp()
   const [f, setF] = useState({ title:'', day:defaultDay||1, time:'', clientId:'', assignedEmail:'', recurring:false })
   const [loading, setLoading] = useState(false)
@@ -235,7 +248,8 @@ function TodoModal({ open, editing, defaultDay, clients, collaborators, weekDate
     if (!f.title) { showToast('Informe o título','error'); return }
     setLoading(true)
     const wStr = dateStr(weekDate)
-    const payload = { title:f.title, day_of_week:parseInt(f.day), task_time:f.time||null, client_id:f.clientId||null, assigned_email:f.assignedEmail||null, is_recurring:f.recurring, week_date:wStr }
+    const isMine = scope === 'mine'
+    const payload = { title:f.title, day_of_week:parseInt(f.day), task_time:f.time||null, client_id:f.clientId||null, assigned_email:f.assignedEmail||null, is_recurring:f.recurring, week_date:wStr, is_private:isMine, owner_email: isMine ? (user?.email || null) : null }
     if (editing) {
       const { data } = await supabase.from('todo_items').update(payload).eq('id', editing.id).select().single()
       onSaved(data)
@@ -247,7 +261,12 @@ function TodoModal({ open, editing, defaultDay, clients, collaborators, weekDate
     showToast(editing ? 'Tarefa atualizada!' : 'Tarefa criada!')
   }
   return (
-    <Modal open={open} onClose={onClose} title={editing ? 'Editar tarefa' : 'Nova tarefa'} width="max-w-md">
+    <Modal open={open} onClose={onClose} title={editing ? 'Editar tarefa' : (scope==='mine' ? 'Nova tarefa pessoal' : 'Nova tarefa')} width="max-w-md">
+      {scope === 'mine' && (
+        <div className="flex items-center gap-2 bg-green/10 border border-green/25 rounded-xl p-2.5 mb-3 text-[11px] text-green">
+          🔒 Essa tarefa é privada — só você vai vê-la.
+        </div>
+      )}
       <Field label="Tarefa *"><input className="input" value={f.title} onChange={e=>setF(p=>({...p,title:e.target.value}))} placeholder="Ex: Postar no Instagram" autoFocus /></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Dia">

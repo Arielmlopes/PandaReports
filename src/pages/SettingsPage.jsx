@@ -74,6 +74,30 @@ export default function SettingsPage() {
     showToast('Logo removida')
   }
 
+  const [loginImageUrl, setLoginImageUrl] = useState(() => localStorage.getItem('sys_login_image') || '')
+  const [loginImageUploading, setLoginImageUploading] = useState(false)
+
+  const uploadLoginImage = async (e) => {
+    const file = e.target.files[0]; if (!file) return
+    setLoginImageUploading(true)
+    const path = `login/login_image_${Date.now()}.jpg`
+    const { error } = await supabase.storage.from('uploads').upload(path, file, { upsert: true })
+    if (!error) {
+      const { data } = supabase.storage.from('uploads').getPublicUrl(path)
+      await supabase.from('settings').upsert({ key: 'login_image', logo_url: data.publicUrl }, { onConflict: 'key' })
+      setLoginImageUrl(data.publicUrl)
+      localStorage.setItem('sys_login_image', data.publicUrl)
+      showToast('Imagem da tela de login atualizada!')
+    } else showToast('Erro ao enviar imagem', 'error')
+    setLoginImageUploading(false)
+  }
+
+  const removeLoginImage = async () => {
+    await supabase.from('settings').delete().eq('key', 'login_image')
+    setLoginImageUrl(''); localStorage.removeItem('sys_login_image')
+    showToast('Imagem removida — voltou ao padrão')
+  }
+
   const Section = ({ title, children }) => (
     <motion.div className="card p-5 mb-4" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
       <h3 className="text-sm font-semibold mb-4">{title}</h3>
@@ -98,6 +122,23 @@ export default function SettingsPage() {
               {logoUploading ? '⏳ Enviando...' : '📤 Enviar logo'}
             </label>
             {logoUrl && <button onClick={removeLogo} style={{ padding: '8px 14px', borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Remover</button>}
+          </div>
+        </div>
+      </Section>
+
+      {/* Imagem da tela de login */}
+      <Section title="🖼 Imagem da tela de login">
+        <p style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>Aparece no card do lado esquerdo da tela de login. Se não definida, usa o visual padrão com o panda.</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          {loginImageUrl
+            ? <img src={loginImageUrl} alt="Imagem de login atual" style={{ width: 90, height: 130, objectFit: 'cover', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)' }}/>
+            : <div style={{ width: 90, height: 130, borderRadius: 10, background: '#141414', border: '1px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🐼</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, background: 'rgba(107,175,69,0.1)', border: '1px solid rgba(107,175,69,0.3)', color: '#6BAF45', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              <input type="file" accept="image/*" className="hidden" onChange={uploadLoginImage}/>
+              {loginImageUploading ? '⏳ Enviando...' : '📤 Enviar imagem'}
+            </label>
+            {loginImageUrl && <button onClick={removeLoginImage} style={{ padding: '8px 14px', borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Remover</button>}
           </div>
         </div>
       </Section>
