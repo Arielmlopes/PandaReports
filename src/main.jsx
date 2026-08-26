@@ -1,21 +1,19 @@
-import { StrictMode, useState } from 'react'
-import { createRoot } from 'react-dom/client'
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
-import SplashScreen from './components/ui/SplashScreen.jsx'
+import { AuthProvider } from './contexts/AuthContext.jsx'
+import { AppProvider } from './contexts/AppContext.jsx'
 import './index.css'
 
-function Root() {
-  const [splashDone, setSplashDone] = useState(false)
-  return (
-    <>
-      {!splashDone && <SplashScreen onComplete={() => setSplashDone(true)} />}
-      <App />
-    </>
-  )
-}
-
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <Root />
-  </StrictMode>
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppProvider>
+          <App />
+        </AppProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  </React.StrictMode>
 )

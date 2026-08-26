@@ -1,72 +1,97 @@
-import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
-export const ROLES = { ADMIN: 'admin', MEMBER: 'member', CLIENT: 'client', FREELANCER: 'freelancer' }
+const REMEMBER_KEY = 'panda_remember_session'
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
+  const [session, setSession] = useState(null)
   const [role, setRole] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const resolveRole = async (email) => {
-    const { data } = await supabase.from('user_roles').select('role').eq('email', email).single()
-    return data?.role || ROLES.MEMBER
-  }
-
-  useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (data.session) {
-        setUser(data.session.user)
-        const r = await resolveRole(data.session.user.email)
-        setRole(r)
-      }
-      setLoading(false)
-    })
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-        setUser(session.user)
-        const r = await resolveRole(session.user.email)
-        setRole(r)
-      } else {
-        setUser(null)
-        setRole(null)
-      }
-    })
-    return () => listener.subscription.unsubscribe()
+  const loadRole = useCallback(async (email) => {
+    if (!email) {
+      setRole(null)
+      return
+    }
+    const { data } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('email', email)
+      .maybeSingle()
+    setRole(data?.role || 'member')
   }, [])
 
-  const login = async (email, password) => {
+  useEffect(() => {
+    async function init() {
+      const { data } = await supabase.auth.getSession()
+      setSession(data.session)
+      if (data.session?.user?.email) await loadRole(data.session.user.email)
+      setLoading(false)
+    }
+    init()
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession)
+      if (newSession?.user?.email) loadRole(newSession.user.email)
+      else setRole(null)
+    })
+
+    return () => sub.subscription.unsubscribe()
+  }, [loadRole])
+
+  async function login(email, password, remember) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    const r = await resolveRole(email)
-    setRole(r)
-    return { user: data.user, role: r }
+    // Resolve o role antes de devolver o controle: evita que uma navegacao
+    // imediata para uma rota admin (ex: Configuracoes) veja role ainda nulo.
+    await loadRole(email)
+    if (remember) {
+      const saved = JSON.parse(localStorage.getItem(REMEMBER_KEY) || '[]')
+      const exists = saved.find((s) => s.email === email)
+      if (!exists) {
+        saved.push({ email })
+        localStorage.setItem(REMEMBER_KEY, JSON.stringify(saved))
+      }
+    }
+    return data
   }
 
-  const logout = async () => {
+  async function logout() {
     await supabase.auth.signOut()
-    setUser(null)
+    setSession(null)
     setRole(null)
   }
 
-  const isAdmin = role === ROLES.ADMIN
-  const isMember = role === ROLES.MEMBER
-  const isClient = role === ROLES.CLIENT
-  const isFreelancer = role === ROLES.FREELANCER
-  const canAccessAdmin = isAdmin
-  const canAccessKanban = isAdmin || isMember || isFreelancer
-  const canAccessClients = isAdmin || isMember
+  function getSavedSessions() {
+    return JSON.parse(localStorage.getItem(REMEMBER_KEY) || '[]')
+  }
 
-  return (
-    <AuthContext.Provider value={{ user, role, loading, login, logout, isAdmin, isMember, isClient, isFreelancer, canAccessAdmin, canAccessKanban, canAccessClients, ROLES }}>
-      {children}
-    </AuthContext.Provider>
-  )
+  function removeSavedSession(email) {
+    const saved = getSavedSessions().filter((s) => s.email !== email)
+    localStorage.setItem(REMEMBER_KEY, JSON.stringify(saved))
+  }
+
+  const value = {
+    session,
+    user: session?.user || null,
+    role,
+    loading,
+    login,
+    logout,
+    getSavedSessions,
+    removeSavedSession,
+    isAdmin: role === 'admin',
+    isMember: role === 'member',
+    isFreelancer: role === 'freelancer',
+    isClient: role === 'client'
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-export const useAuth = () => {
+export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')
   return ctx

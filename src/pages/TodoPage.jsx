@@ -1,290 +1,538 @@
-import { useEffect, useState, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { supabase } from '@/lib/supabase'
-import { useApp } from '@/contexts/AppContext'
-import { useAuth } from '@/contexts/AuthContext'
-import { Button, Field, Modal, Toggle, Spinner } from '@/components/ui'
-import { ChevronLeft, ChevronRight, Plus, Trash2, RotateCcw } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, Plus, Lock, Repeat, Check, Undo2, Trash2, Users } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import { useApp } from '../contexts/AppContext'
+import { useAuth } from '../contexts/AuthContext'
+import { Button, Modal, Field, Select, Toggle, Badge, Spinner, EmptyState } from '../components/ui'
+import { formatTime } from '../utils'
 
-const DAYS = ['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo']
+const DAY_LABELS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
 
-const getMondayOfWeek = (d = new Date()) => {
-  const dt = new Date(d)
-  const day = dt.getDay()
-  dt.setDate(dt.getDate() + (day === 0 ? -6 : 1 - day))
-  dt.setHours(0,0,0,0)
-  return dt
-}
-const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate()+n); return r }
-const dateStr = (d) => d.toISOString().split('T')[0]
-const fmtTime = (t) => t ? t.slice(0,5) : ''
-
-function getTimeState(task) {
-  if (!task.task_time || task.completed) return 'normal'
-  const monday = new Date(task.week_date + 'T00:00:00')
-  const taskDate = new Date(monday)
-  taskDate.setDate(monday.getDate() + (task.day_of_week - 1))
-  const [hh, mm] = task.task_time.split(':').map(Number)
-  taskDate.setHours(hh, mm, 0, 0)
-  const diffMin = (taskDate - Date.now()) / 60000
-  if (diffMin < 0) return 'overdue'
-  if (diffMin <= 120) return 'warning'
-  return 'normal'
+function mondayOf(date) {
+  const d = new Date(date)
+  const day = d.getDay()
+  const diff = day === 0 ? 6 : day - 1
+  d.setDate(d.getDate() - diff)
+  d.setHours(0, 0, 0, 0)
+  return d
 }
 
-function wasLate(task) {
-  if (!task.task_time || !task.completed_at) return null
-  const monday = new Date(task.week_date + 'T00:00:00')
-  const taskDate = new Date(monday)
-  taskDate.setDate(monday.getDate() + (task.day_of_week - 1))
-  const [hh, mm] = task.task_time.split(':').map(Number)
-  taskDate.setHours(hh, mm, 0, 0)
-  return new Date(task.completed_at) > taskDate
+function toISODate(d) {
+  return d.toISOString().slice(0, 10)
+}
+
+function addDays(date, days) {
+  const d = new Date(date)
+  d.setDate(d.getDate() + days)
+  return d
 }
 
 export default function TodoPage() {
-  const { clients, collaborators } = useApp()
-  const { isAdmin, isMember, user } = useAuth()
-  const [weekDate, setWeekDate] = useState(() => getMondayOfWeek())
+  const { clients, pushToast } = useApp()
+  const { user, isAdmin } = useAuth()
+  const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()))
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('board')
-  const [scope, setScope] = useState('team') // 'team' | 'mine'
-  const [modal, setModal] = useState({ open: false, editing: null, dayNum: 1 })
+  const [modalDay, setModalDay] = useState(null)
+  const [editItem, setEditItem] = useState(null)
+  const [tab, setTab] = useState('board') // board | done
+  const [boards, setBoards] = useState([])
+  const [activeBoardId, setActiveBoardId] = useState(null) // null = quadro padrao "Equipe"
+  const [newBoardOpen, setNewBoardOpen] = useState(false)
+  // Detecta se a coluna todo_items.board_id (e a tabela todo_boards) ja existem no banco.
+  // Enquanto a migracao (supabase/migrations.sql) nao rodar, o app tem que continuar
+  // funcionando exatamente como antes, sem filtrar/gravar board_id em nada.
+  const [boardsSupported, setBoardsSupported] = useState(false)
+  const [boardsChecked, setBoardsChecked] = useState(false)
 
-  const loadItems = useCallback(async () => {
+  const weekDateStr = toISODate(weekStart)
+  const today = toISODate(new Date())
+
+  useEffect(() => {
+    supabase
+      .from('todo_items')
+      .select('board_id')
+      .limit(1)
+      .then(({ error }) => {
+        setBoardsSupported(!error)
+        setBoardsChecked(true)
+      })
+  }, [])
+
+  const loadBoards = useCallback(async () => {
+    if (!isAdmin || !user?.email || !boardsSupported) return
+    const { data, error } = await supabase.from('todo_boards').select('*').eq('owner_email', user.email).order('created_at')
+    if (!error) setBoards(data || [])
+  }, [isAdmin, user?.email, boardsSupported])
+
+  useEffect(() => {
+    loadBoards()
+  }, [loadBoards])
+
+  async function createBoard(name) {
+    try {
+      const { data, error } = await supabase.from('todo_boards').insert({ name, owner_email: user.email }).select().single()
+      if (error) throw error
+      setBoards((b) => [...b, data])
+      setActiveBoardId(data.id)
+      setNewBoardOpen(false)
+    } catch {
+      pushToast({ message: 'Não foi possível criar o quadro. Rode a migração do banco (supabase/migrations.sql).', type: 'error' })
+    }
+  }
+
+  const loadWeek = useCallback(async () => {
     setLoading(true)
-    const wStr = dateStr(weekDate)
-    const prevWStr = dateStr(addDays(weekDate, -7))
+    let itemsQuery = supabase.from('todo_items').select('*').eq('week_date', weekDateStr).order('position')
+    if (boardsSupported) {
+      itemsQuery = activeBoardId ? itemsQuery.eq('board_id', activeBoardId) : itemsQuery.is('board_id', null)
+    }
+    const { data } = await itemsQuery
 
-    const applyScope = (q) => scope === 'mine'
-      ? q.eq('is_private', true).eq('owner_email', user?.email || '')
-      : q.or('is_private.is.false,is_private.is.null')
+    const visible = (data || []).filter((t) => !t.is_private || t.owner_email === user?.email)
+    setItems(visible)
 
-    const { data: curr } = await applyScope(supabase.from('todo_items').select('*').eq('week_date', wStr)).order('position')
-    const { data: prevRec } = await applyScope(supabase.from('todo_items').select('*').eq('week_date', prevWStr).eq('is_recurring', true))
-    let all = curr || []
-    // Propagate recurring from previous week
-    if (prevRec?.length) {
-      const toCreate = []
-      for (const t of prevRec) {
-        if (!all.find(e => e.is_recurring && e.title === t.title && e.day_of_week === t.day_of_week)) {
-          toCreate.push({ title:t.title, day_of_week:t.day_of_week, client_id:t.client_id, assigned_email:t.assigned_email, task_time:t.task_time, is_recurring:true, week_date:wStr, completed:false, position:t.position, is_private:t.is_private||false, owner_email:t.owner_email||null })
-        }
-      }
-      if (toCreate.length) {
-        const { data: created } = await supabase.from('todo_items').insert(toCreate).select()
-        if (created) all = [...all, ...created]
+    // propagar recorrentes da semana anterior (dentro do mesmo quadro)
+    const prevWeekStr = toISODate(addDays(weekStart, -7))
+    let prevQuery = supabase.from('todo_items').select('*').eq('week_date', prevWeekStr).eq('is_recurring', true)
+    if (boardsSupported) {
+      prevQuery = activeBoardId ? prevQuery.eq('board_id', activeBoardId) : prevQuery.is('board_id', null)
+    }
+    const { data: prevRecurring } = await prevQuery
+
+    const toInsert = []
+    for (const p of prevRecurring || []) {
+      if (p.is_private && p.owner_email !== user?.email) continue
+      const exists = visible.find(
+        (v) =>
+          v.title === p.title &&
+          v.day_of_week === p.day_of_week &&
+          v.owner_email === p.owner_email &&
+          v.assigned_email === p.assigned_email
+      )
+      if (!exists) {
+        toInsert.push({
+          title: p.title,
+          day_of_week: p.day_of_week,
+          client_id: p.client_id,
+          assigned_email: p.assigned_email,
+          task_time: p.task_time,
+          is_recurring: true,
+          week_date: weekDateStr,
+          completed: false,
+          position: p.position,
+          is_private: p.is_private,
+          owner_email: p.owner_email,
+          ...(boardsSupported ? { board_id: activeBoardId } : {})
+        })
       }
     }
-    setItems(all)
+    if (toInsert.length > 0) {
+      const { data: inserted } = await supabase.from('todo_items').insert(toInsert).select()
+      setItems((prev) => [...prev, ...(inserted || [])])
+    }
+
     setLoading(false)
-  }, [weekDate, scope, user?.email])
+  }, [weekDateStr, weekStart, user?.email, activeBoardId, boardsSupported])
 
-  useEffect(() => { loadItems() }, [loadItems])
+  useEffect(() => {
+    loadWeek()
+  }, [loadWeek])
 
-  const toggleItem = async (id) => {
-    const item = items.find(i => i.id === id)
-    if (!item) return
+  function timeStatus(item) {
+    if (!item.task_time) return null
+    const dayDate = addDays(weekStart, item.day_of_week)
+    const scheduled = new Date(`${toISODate(dayDate)}T${item.task_time}`)
+    const diffMs = scheduled.getTime() - Date.now()
+    if (item.completed) return 'done'
+    if (diffMs < 0) return 'late'
+    if (diffMs <= 2 * 3600 * 1000) return 'soon'
+    return 'normal'
+  }
+
+  async function toggleComplete(item) {
     const completed = !item.completed
-    const completed_at = completed ? new Date().toISOString() : null
-    setItems(p => p.map(i => i.id === id ? {...i, completed, completed_at} : i))
-    await supabase.from('todo_items').update({ completed, completed_at }).eq('id', id)
+    const patch = { completed, completed_at: completed ? new Date().toISOString() : null }
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, ...patch } : i)))
+    await supabase.from('todo_items').update(patch).eq('id', item.id)
   }
 
-  const deleteItem = async (id) => {
-    const item = items.find(i => i.id === id)
-    if (!item) return
-    if (item.is_recurring) {
-      const wStr = dateStr(weekDate)
-      await supabase.from('todo_items').delete().eq('is_recurring', true).eq('title', item.title).eq('day_of_week', item.day_of_week).gte('week_date', wStr)
-      setItems(p => p.filter(i => !(i.is_recurring && i.title === item.title && i.day_of_week === item.day_of_week)))
-    } else {
-      await supabase.from('todo_items').delete().eq('id', id)
-      setItems(p => p.filter(i => i.id !== id))
-    }
+  async function deleteItem(item) {
+    setItems((prev) => prev.filter((i) => i.id !== item.id))
+    await supabase.from('todo_items').delete().eq('id', item.id)
   }
 
-  const wStr = dateStr(weekDate)
-  const prevW = dateStr(addDays(weekDate, -7))
-  const todayStr = dateStr(new Date())
-  const mon = weekDate
-  const sun = addDays(weekDate, 6)
-  const fmt = d => `${d.getDate()}/${d.getMonth()+1}`
+  const doneItems = items.filter((i) => i.completed)
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Scope tabs */}
-      <div className="flex items-center gap-2 mb-3 flex-shrink-0">
-        <button onClick={() => setScope('team')} className={`chip ${scope==='team'?'chip-active':'chip-inactive'}`}>🏢 Equipe</button>
-        <button onClick={() => setScope('mine')} className={`chip ${scope==='mine'?'chip-active':'chip-inactive'}`}>🔒 Meu To-Do</button>
-        {scope === 'mine' && <span className="text-[11px] text-text-3">Só você vê essas tarefas</span>}
+    <div className="p-4 md:p-6 flex flex-col h-[calc(100vh-57px)]">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3 flex-shrink-0">
+        <h1 className="text-xl font-semibold text-text">To-Do Semanal</h1>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 bg-bg4 rounded-input p-1">
+            <button onClick={() => setTab('board')} className={`text-xs px-3 py-1.5 rounded-input ${tab === 'board' ? 'bg-bg text-text' : 'text-text3'}`}>
+              Board
+            </button>
+            <button onClick={() => setTab('done')} className={`text-xs px-3 py-1.5 rounded-input ${tab === 'done' ? 'bg-bg text-text' : 'text-text3'}`}>
+              Concluídos ({doneItems.length})
+            </button>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setWeekStart((w) => addDays(w, -7))} className="text-text3 hover:text-text p-1">
+              <ChevronLeft size={18} />
+            </button>
+            <button onClick={() => setWeekStart(mondayOf(new Date()))} className="text-xs text-text2 hover:text-text px-2">
+              Hoje
+            </button>
+            <button onClick={() => setWeekStart((w) => addDays(w, 7))} className="text-text3 hover:text-text p-1">
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-3 mb-4 flex-wrap flex-shrink-0">
-        <div className="flex gap-2">
-          <button onClick={() => setTab('board')} className={`chip ${tab==='board'?'chip-active':'chip-inactive'}`}>📋 Semana</button>
-          <button onClick={() => setTab('done')} className={`chip ${tab==='done'?'chip-active':'chip-inactive'}`}>✅ Concluídos</button>
+      {isAdmin && boardsChecked && !boardsSupported && (
+        <div className="mb-4 flex-shrink-0 text-xs text-yellow bg-yellow/10 border border-yellow/30 rounded-input px-3 py-2">
+          Quadros pessoais (separados do "Equipe") ainda não estão disponíveis — rode a migração do banco
+          (supabase/migrations.sql) pra liberar.
         </div>
-        <div className="flex items-center gap-2 ml-auto">
-          <button onClick={() => setWeekDate(getMondayOfWeek())} className="text-xs text-text-3 hover:text-green px-2 py-1 rounded border border-border hover:border-green transition-colors">Hoje</button>
-          <button onClick={() => setWeekDate(d => addDays(d, -7))} className="w-7 h-7 bg-bg-3 border border-border rounded-lg flex items-center justify-center text-text-2 hover:text-text"><ChevronLeft size={14}/></button>
-          <span className="text-sm font-semibold whitespace-nowrap">{fmt(mon)} – {fmt(sun)}</span>
-          <button onClick={() => setWeekDate(d => addDays(d, 7))} className="w-7 h-7 bg-bg-3 border border-border rounded-lg flex items-center justify-center text-text-2 hover:text-text"><ChevronRight size={14}/></button>
-          <Button variant="green" size="sm" onClick={() => setModal({ open:true, editing:null, dayNum:1 })}><Plus size={14}/> {scope==='mine' ? 'Nova tarefa pessoal' : 'Nova tarefa'}</Button>
-        </div>
-      </div>
-
-      {loading ? <div className="flex items-center justify-center flex-1"><Spinner/></div> : (
-        tab === 'board' ? (
-          <div className="flex gap-3 flex-1 pb-2" style={{overflowX:"auto",overflowY:"hidden",minHeight:0}}>
-            {DAYS.map((day, i) => {
-              const dayNum = i + 1
-              const dayDate = addDays(weekDate, i)
-              const dayStr = dateStr(dayDate)
-              const isToday = dayStr === todayStr
-              const dayItems = items.filter(t => t.week_date === wStr && t.day_of_week === dayNum).sort((a,b)=>(a.position??0)-(b.position??0))
-              return (
-                <div key={day} className="bg-bg-2 border border-border rounded-xl flex flex-col flex-shrink-0" style={{width:260,minWidth:260,flex:1,minHeight:0,maxHeight:'100%'}}>
-                  <div className={`px-3 py-2.5 border-b border-border flex items-center gap-2 flex-shrink-0 ${isToday?'border-green/30':''}`}>
-                    <span className={`text-xs font-bold flex-1 ${isToday?'text-green':''}`}>{day}</span>
-                    <span className={`text-[10px] ${isToday?'text-green opacity-70':'text-text-3'}`}>{dayDate.getDate()}/{dayDate.getMonth()+1}</span>
-                  </div>
-                  <div className="overflow-y-auto flex-1 p-2 flex flex-col gap-2" style={{overscrollBehavior:'contain'}}>
-                    {dayItems.length === 0 && <p className="text-center text-[11px] text-text-3 py-4">Sem tarefas</p>}
-                    {dayItems.map(t => {
-                      const state = getTimeState(t)
-                      const client = clients.find(c => c.id === t.client_id)
-                      return (
-                        <div key={t.id} className={`rounded-lg border p-2.5 flex gap-2 transition-all
-                          ${t.completed ? 'opacity-50 border-border bg-bg-3' : state==='overdue' ? 'bg-red-500/5 border-red-500/30' : state==='warning' ? 'bg-yellow-400/5 border-yellow-400/30' : 'bg-bg-3 border-border-2 hover:border-green/40'}`}>
-                          <button onClick={() => toggleItem(t.id)}
-                            className={`w-4 h-4 rounded-full border flex-shrink-0 mt-0.5 flex items-center justify-center transition-all
-                              ${t.completed ? 'bg-green border-green text-black text-[9px]' : state==='overdue'?'border-red-400':'border-border-2 hover:border-green'}`}>
-                            {t.completed && '✓'}
-                          </button>
-                          <div className="flex-1 min-w-0" onClick={() => setModal({open:true, editing:t, dayNum})}>
-                            <p className={`text-xs font-medium leading-snug cursor-pointer ${t.completed?'line-through text-text-3':''}`}>{t.title}</p>
-                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                              {client && <span className="flex items-center gap-0.5"><span className="w-1.5 h-1.5 rounded-full" style={{background:client.color}}/><span className="text-[10px] text-text-3 truncate">{client.name}</span></span>}
-                              {t.task_time && <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold border ${t.completed?'bg-green/10 text-green border-green/25':state==='overdue'?'bg-red-500/10 text-red-400 border-red-500/25':state==='warning'?'bg-yellow-400/10 text-yellow-400 border-yellow-400/25':'bg-bg-4 text-text-3 border-border'}`}>🕐 {fmtTime(t.task_time)}</span>}
-                              {t.is_recurring && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/25 font-bold">🔄</span>}
-                            </div>
-                          </div>
-                          <button onClick={() => deleteItem(t.id)} className="text-text-3 hover:text-red-400 transition-colors flex-shrink-0 mt-0.5"><Trash2 size={11}/></button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <button className="px-3 py-2 text-xs text-text-3 hover:text-green hover:bg-green/5 border-t border-border transition-colors flex items-center gap-1 flex-shrink-0 rounded-b-xl"
-                    onClick={() => setModal({open:true,editing:null,dayNum})}>
-                    <Plus size={11}/> Adicionar
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="overflow-y-auto flex-1">
-            <div className="max-w-2xl space-y-2">
-              {items.filter(t => t.week_date===wStr && t.completed).length === 0
-                ? <div className="text-center py-16 text-text-3"><div className="text-4xl mb-3 opacity-30">✅</div><p className="text-sm">Nenhuma tarefa concluída esta semana</p></div>
-                : items.filter(t => t.week_date===wStr && t.completed).map(t => {
-                    const late = wasLate(t)
-                    const client = clients.find(c => c.id === t.client_id)
-                    const completedAt = t.completed_at ? new Date(t.completed_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''
-                    return (
-                      <div key={t.id} className="card p-3.5 flex items-center gap-3">
-                        <span className="text-lg">{late===true?'🔴':'✅'}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium line-through text-text-2 truncate">{t.title}</p>
-                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            {client && <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full" style={{background:client.color}}/><span className="text-[10px] text-text-3">{client.name}</span></span>}
-                            {t.task_time && <span className="text-[10px] text-text-3">Previsto: {fmtTime(t.task_time)}</span>}
-                            {t.task_time && (
-                              late === true
-                                ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/25 font-bold">⚠ Em atraso</span>
-                                : <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green/10 text-green border border-green/25 font-bold">✓ No prazo</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-[11px] text-text-3">{completedAt}</span>
-                          <button onClick={() => toggleItem(t.id)} className="text-text-3 hover:text-green text-xs"><RotateCcw size={13}/></button>
-                        </div>
-                      </div>
-                    )
-                  })
-              }
-            </div>
-          </div>
-        )
       )}
 
-      {/* Modal */}
-      <TodoModal open={modal.open} editing={modal.editing} defaultDay={modal.dayNum} clients={clients} collaborators={collaborators}
-        weekDate={weekDate} scope={scope} user={user}
-        onClose={() => setModal(p => ({...p, open:false, editing:null}))}
-        onSaved={(item) => {
-          setItems(p => modal.editing ? p.map(i => i.id===item.id?item:i) : [...p, item])
-          setModal(p => ({...p, open:false, editing:null}))
-        }}
-        onDeleted={(id) => { deleteItem(id); setModal(p=>({...p,open:false,editing:null})) }}
-      />
+      {isAdmin && boardsSupported && (
+        <div className="flex items-center gap-2 flex-wrap mb-4 flex-shrink-0">
+          <button
+            onClick={() => setActiveBoardId(null)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors duration-150 ${
+              activeBoardId === null
+                ? 'bg-green-dim text-green border-green/30'
+                : 'bg-bg4 text-text2 border-border2 hover:text-text'
+            }`}
+          >
+            <Users size={12} /> Equipe
+          </button>
+          {boards.map((b) => (
+            <button
+              key={b.id}
+              onClick={() => setActiveBoardId(b.id)}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors duration-150 ${
+                activeBoardId === b.id
+                  ? 'bg-green-dim text-green border-green/30'
+                  : 'bg-bg4 text-text2 border-border2 hover:text-text'
+              }`}
+            >
+              {b.name}
+            </button>
+          ))}
+          <button
+            onClick={() => setNewBoardOpen(true)}
+            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full border border-dashed border-border2 text-text3 hover:text-green hover:border-green/40"
+          >
+            <Plus size={12} /> Novo quadro
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <Spinner />
+        </div>
+      ) : tab === 'done' ? (
+        <DoneList items={doneItems} clients={clients} onUndo={toggleComplete} />
+      ) : (
+        <div className="flex gap-3 flex-1 overflow-x-auto lg:overflow-x-visible lg:grid lg:grid-cols-7 snap-x snap-proximity lg:snap-none pb-3">
+          {DAY_LABELS.map((label, dayIdx) => {
+            const dayDate = addDays(weekStart, dayIdx)
+            const isToday = toISODate(dayDate) === today
+            const dayItems = items
+              .filter((i) => i.day_of_week === dayIdx)
+              .sort((a, b) => (a.position || 0) - (b.position || 0))
+            const shared = dayItems.filter((i) => !i.is_private)
+            const priv = dayItems.filter((i) => i.is_private)
+
+            return (
+              <div
+                key={dayIdx}
+                className={`flex-shrink-0 w-[78vw] sm:w-[260px] lg:w-auto snap-start flex flex-col rounded-card border ${
+                  isToday ? 'border-green/40 bg-green-dim/20' : 'border-border bg-bg2'
+                }`}
+              >
+                <div className="flex items-center justify-between px-3 py-2.5 border-b border-border flex-shrink-0">
+                  <div>
+                    <p className={`text-sm font-medium ${isToday ? 'text-green' : 'text-text'}`}>{label}</p>
+                    <p className="text-[11px] text-text3">{dayDate.getDate()}/{dayDate.getMonth() + 1}</p>
+                  </div>
+                  <button onClick={() => setModalDay(dayIdx)} className="text-text3 hover:text-green">
+                    <Plus size={15} />
+                  </button>
+                </div>
+
+                <div className="todo-col-body flex-1 overflow-y-auto p-2 flex flex-col gap-3" style={{ minHeight: 0 }}>
+                  <TaskSection
+                    label="Compartilhadas"
+                    items={shared}
+                    clients={clients}
+                    timeStatus={timeStatus}
+                    onToggle={toggleComplete}
+                    onEdit={setEditItem}
+                    onDelete={deleteItem}
+                  />
+                  {priv.length > 0 && (
+                    <TaskSection
+                      label="Privadas"
+                      icon={Lock}
+                      items={priv}
+                      clients={clients}
+                      timeStatus={timeStatus}
+                      onToggle={toggleComplete}
+                      onEdit={setEditItem}
+                      onDelete={deleteItem}
+                    />
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {(modalDay !== null || editItem) && (
+        <TaskModal
+          dayOfWeek={editItem ? editItem.day_of_week : modalDay}
+          weekDateStr={weekDateStr}
+          boardId={boardsSupported ? activeBoardId : undefined}
+          clients={clients}
+          userEmail={user?.email}
+          existing={editItem}
+          onClose={() => {
+            setModalDay(null)
+            setEditItem(null)
+          }}
+          onSaved={(item, isNew) => {
+            setItems((prev) => (isNew ? [...prev, item] : prev.map((i) => (i.id === item.id ? item : i))))
+            setModalDay(null)
+            setEditItem(null)
+          }}
+        />
+      )}
+
+      {newBoardOpen && <NewBoardModal onClose={() => setNewBoardOpen(false)} onCreate={createBoard} />}
     </div>
   )
 }
 
-function TodoModal({ open, editing, defaultDay, clients, collaborators, weekDate, scope, user, onClose, onSaved, onDeleted }) {
-  const { showToast } = useApp()
-  const [f, setF] = useState({ title:'', day:defaultDay||1, time:'', clientId:'', assignedEmail:'', recurring:false })
-  const [loading, setLoading] = useState(false)
-  useEffect(() => {
-    if (editing) setF({ title:editing.title||'', day:editing.day_of_week||1, time:editing.task_time?editing.task_time.slice(0,5):'', clientId:editing.client_id||'', assignedEmail:editing.assigned_email||'', recurring:editing.is_recurring||false })
-    else setF(p => ({ ...p, day:defaultDay||1, title:'', time:'', clientId:'', assignedEmail:'', recurring:false }))
-  }, [editing, defaultDay])
-  const submit = async () => {
-    if (!f.title) { showToast('Informe o título','error'); return }
-    setLoading(true)
-    const wStr = dateStr(weekDate)
-    const isMine = scope === 'mine'
-    const payload = { title:f.title, day_of_week:parseInt(f.day), task_time:f.time||null, client_id:f.clientId||null, assigned_email:f.assignedEmail||null, is_recurring:f.recurring, week_date:wStr, is_private:isMine, owner_email: isMine ? (user?.email || null) : null }
-    if (editing) {
-      const { data } = await supabase.from('todo_items').update(payload).eq('id', editing.id).select().single()
-      onSaved(data)
-    } else {
-      const { data } = await supabase.from('todo_items').insert({...payload, completed:false, position:0}).select().single()
-      onSaved(data)
-    }
-    setLoading(false)
-    showToast(editing ? 'Tarefa atualizada!' : 'Tarefa criada!')
-  }
+function TaskSection({ label, icon: Icon, items, clients, timeStatus, onToggle, onEdit, onDelete }) {
   return (
-    <Modal open={open} onClose={onClose} title={editing ? 'Editar tarefa' : (scope==='mine' ? 'Nova tarefa pessoal' : 'Nova tarefa')} width="max-w-md">
-      {scope === 'mine' && (
-        <div className="flex items-center gap-2 bg-green/10 border border-green/25 rounded-xl p-2.5 mb-3 text-[11px] text-green">
-          🔒 Essa tarefa é privada — só você vai vê-la.
+    <div>
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-text3 mb-1.5 px-1">
+        {Icon && <Icon size={10} />}
+        {label}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {items.map((item) => (
+          <TaskCard
+            key={item.id}
+            item={item}
+            client={clients.find((c) => c.id === item.client_id)}
+            status={timeStatus(item)}
+            onToggle={() => onToggle(item)}
+            onEdit={() => onEdit(item)}
+            onDelete={() => onDelete(item)}
+          />
+        ))}
+        {items.length === 0 && <p className="text-[11px] text-text3 px-1">Nada por aqui</p>}
+      </div>
+    </div>
+  )
+}
+
+const STATUS_COLOR = {
+  done: 'green',
+  late: 'red',
+  soon: 'yellow',
+  normal: 'default'
+}
+
+function TaskCard({ item, client, status, onToggle, onEdit, onDelete }) {
+  return (
+    <div className="group bg-bg3 border border-border rounded-input px-2.5 py-2 flex flex-col gap-1">
+      <div className="flex items-start gap-2">
+        <button onClick={onToggle} className="mt-0.5 flex-shrink-0">
+          <div
+            className="w-4 h-4 rounded flex items-center justify-center border"
+            style={{
+              background: item.completed ? 'var(--green)' : 'transparent',
+              borderColor: item.completed ? 'var(--green)' : 'var(--border2)'
+            }}
+          >
+            {item.completed && <Check size={11} color="#0a1206" strokeWidth={3} />}
+          </div>
+        </button>
+        <button onClick={onEdit} className={`flex-1 text-left text-sm ${item.completed ? 'line-through text-text3' : 'text-text'}`}>
+          {item.title}
+        </button>
+        <button onClick={onDelete} className="opacity-0 group-hover:opacity-100 text-text3 hover:text-red flex-shrink-0">
+          <Trash2 size={12} />
+        </button>
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap pl-6">
+        {item.task_time && <Badge color={STATUS_COLOR[status]}>{formatTime(item.task_time)}</Badge>}
+        {client && (
+          <span className="flex items-center gap-1 text-[11px] text-text3">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: client.color || 'var(--green)' }} />
+            {client.name}
+          </span>
+        )}
+        {item.is_recurring && <Repeat size={10} className="text-text3" />}
+        {item.is_private && <Lock size={10} className="text-text3" />}
+      </div>
+    </div>
+  )
+}
+
+function DoneList({ items, clients, onUndo }) {
+  if (items.length === 0) return <EmptyState title="Nenhuma tarefa concluída" description="Marque tarefas como feitas para vê-las aqui." />
+
+  return (
+    <div className="flex flex-col gap-2 overflow-y-auto">
+      {items.map((item) => {
+        const dayDate = item.task_time ? new Date(`${item.week_date}T${item.task_time}`) : null
+        const late = dayDate && item.completed_at && new Date(item.completed_at) > dayDate
+        return (
+          <div key={item.id} className="card px-4 py-3 flex items-center gap-3">
+            <Badge color={late ? 'red' : 'green'}>{late ? '⚠ Em atraso' : '✓ No prazo'}</Badge>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-text truncate">{item.title}</p>
+              <p className="text-[11px] text-text3">
+                {clients.find((c) => c.id === item.client_id)?.name || 'Sem cliente'} •{' '}
+                {item.completed_at && new Date(item.completed_at).toLocaleString('pt-BR')}
+              </p>
+            </div>
+            <Button size="sm" variant="ghost" icon={Undo2} onClick={() => onUndo(item)}>
+              Desfazer
+            </Button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function TaskModal({ dayOfWeek, weekDateStr, boardId, clients, userEmail, existing, onClose, onSaved }) {
+  const [title, setTitle] = useState(existing?.title || '')
+  const [day, setDay] = useState(dayOfWeek ?? 0)
+  const [time, setTime] = useState(existing?.task_time || '')
+  const [clientId, setClientId] = useState(existing?.client_id || '')
+  const [recurring, setRecurring] = useState(existing?.is_recurring || false)
+  const [priv, setPriv] = useState(existing?.is_private || false)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const payload = {
+        title,
+        day_of_week: day,
+        task_time: time || null,
+        client_id: clientId || null,
+        is_recurring: recurring,
+        is_private: priv,
+        owner_email: userEmail,
+        week_date: weekDateStr,
+        ...(boardId !== undefined ? { board_id: boardId } : {})
+      }
+      if (existing) {
+        const { data, error } = await supabase.from('todo_items').update(payload).eq('id', existing.id).select().single()
+        if (error) throw error
+        onSaved(data, false)
+      } else {
+        const { data, error } = await supabase
+          .from('todo_items')
+          .insert({ ...payload, completed: false, position: 0 })
+          .select()
+          .single()
+        if (error) throw error
+        onSaved(data, true)
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={existing ? 'Editar tarefa' : 'Nova tarefa'}>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <Field label="Título" value={title} onChange={(e) => setTitle(e.target.value)} required autoFocus />
+        <div className="grid grid-cols-2 gap-3">
+          <Select label="Dia" value={day} onChange={(e) => setDay(Number(e.target.value))}>
+            {DAY_LABELS.map((l, i) => (
+              <option key={i} value={i}>
+                {l}
+              </option>
+            ))}
+          </Select>
+          <Field label="Horário (opcional)" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
         </div>
-      )}
-      <Field label="Tarefa *"><input className="input" value={f.title} onChange={e=>setF(p=>({...p,title:e.target.value}))} placeholder="Ex: Postar no Instagram" autoFocus /></Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Dia">
-          <select className="input" value={f.day} onChange={e=>setF(p=>({...p,day:e.target.value}))}>
-            {['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'].map((d,i)=><option key={i} value={i+1}>{d}</option>)}
-          </select>
-        </Field>
-        <Field label="Horário" optional><input className="input" type="time" value={f.time} onChange={e=>setF(p=>({...p,time:e.target.value}))} /></Field>
-      </div>
-      <Field label="Cliente" optional><select className="input" value={f.clientId} onChange={e=>setF(p=>({...p,clientId:e.target.value}))}><option value="">— Nenhum —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-      <div className="flex items-center justify-between bg-bg-3 border border-border-2 rounded-xl p-3 mb-3">
-        <div><p className="text-xs font-semibold">🔄 Demanda recorrente</p><p className="text-[11px] text-text-3">Aparece automaticamente toda semana</p></div>
-        <Toggle value={f.recurring} onChange={v=>setF(p=>({...p,recurring:v}))} />
-      </div>
-      <div className="flex items-center justify-between">
-        {editing ? <Button variant="red" size="sm" onClick={() => onDeleted(editing.id)}><Trash2 size={13}/> Excluir</Button> : <span/>}
-        <div className="flex gap-2"><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button variant="green" loading={loading} onClick={submit}>Salvar</Button></div>
-      </div>
+        <Select label="Cliente (opcional)" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+          <option value="">Nenhum</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+        <Toggle checked={recurring} onChange={setRecurring} label="Recorrente (repete toda semana)" />
+        <Toggle checked={priv} onChange={setPriv} label="Privada (só você vê)" />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" loading={saving}>
+            Salvar
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function NewBoardModal({ onClose, onCreate }) {
+  const [name, setName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await onCreate(name)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Novo quadro">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <Field
+          label="Nome do quadro"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Ex: Financeiro, Projeto X..."
+          required
+          autoFocus
+        />
+        <p className="text-xs text-text3">
+          Um quadro separado do "Equipe", com suas próprias colunas de dias e tarefas. Visível só para você.
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" loading={saving}>
+            Criar
+          </Button>
+        </div>
+      </form>
     </Modal>
   )
 }

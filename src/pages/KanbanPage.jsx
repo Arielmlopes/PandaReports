@@ -1,131 +1,927 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
-import { AnimatePresence } from 'framer-motion'
-import { supabase } from '@/lib/supabase'
-import { useApp } from '@/contexts/AppContext'
-import { useAuth } from '@/contexts/AuthContext'
-import { Button, Field, Modal, Spinner } from '@/components/ui'
-import { Plus, Paperclip, Trash2, ChevronLeft, ChevronRight, X, Download } from 'lucide-react'
-import { FILE_ICONS, forceDownload } from '@/utils'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Plus,
+  X,
+  Paperclip,
+  Check,
+  Send,
+  AtSign,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Trash2,
+  Undo2,
+  Upload,
+  FileText,
+  CheckCircle2,
+  Pencil
+} from 'lucide-react'
+import { supabase, uploadFile, sanitizeFileName } from '../lib/supabase'
+import { useApp } from '../contexts/AppContext'
+import { useAuth } from '../contexts/AuthContext'
+import { Button, Modal, Field, Select, Avatar, Badge, Spinner, EmptyState } from '../components/ui'
+import { TextWithPreviews } from '../components/ui/LinkPreview'
+import { downloadBlob, formatDateLong, fileCategory } from '../utils'
 
-/* ── inject CSS once ────────────────────────────────────────── */
-;(function(){
-  if(document.getElementById('kbcss')) return
-  const s = document.createElement('style'); s.id='kbcss'; s.textContent=`
-  .kb-wrap{height:100%;display:flex;flex-direction:column;overflow:hidden}
-  .kb-toolbar{flex-shrink:0;padding:16px 16px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-  .kb-board-wrap{flex:1;min-height:0;overflow:hidden;padding:0 16px 12px}
-  .kb-board{display:flex;gap:10px;height:100%;overflow-x:auto;overflow-y:hidden}
-  .kb-board::-webkit-scrollbar{height:10px}
-  .kb-board::-webkit-scrollbar-track{background:#111;border-radius:5px}
-  .kb-board{cursor:grab}
-  .kb-board.panning{cursor:grabbing;user-select:none}
-  .kb-board::-webkit-scrollbar-thumb{background:#222;border-radius:4px}
-  .kb-col{width:250px;min-width:250px;flex-shrink:0;display:flex;flex-direction:column;min-height:0;
-    background:#141414;border:1px solid rgba(255,255,255,0.08);border-radius:12px;height:100%}
-  .kb-col.drag-over{border-color:#6BAF45;background:rgba(107,175,69,0.04)}
-  .kb-col-head{display:flex;align-items:center;gap:8px;padding:11px 13px;
-    border-bottom:1px solid rgba(255,255,255,0.07);flex-shrink:0}
-  .kb-col-label{font-size:12px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#E8E8E8}
-  .kb-col-count{font-size:10px;padding:1px 7px;border-radius:100px;
-    background:#1A1A1A;border:1px solid rgba(255,255,255,0.07);color:#666;flex-shrink:0}
-  .kb-cards{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:8px;
-    display:flex;flex-direction:column;gap:8px;overscroll-behavior:contain}
-  .kb-cards::-webkit-scrollbar{width:3px}
-  .kb-cards::-webkit-scrollbar-thumb{background:#222;border-radius:3px}
-  .kb-col-add{padding:8px 12px;font-size:11px;color:#666;background:transparent;border:none;
-    border-top:1px solid rgba(255,255,255,0.07);cursor:pointer;display:flex;align-items:center;
-    gap:4px;flex-shrink:0;border-radius:0 0 12px 12px;transition:color .15s,background .15s}
-  .kb-col-add:hover{color:#6BAF45;background:rgba(107,175,69,0.05)}
-  .kb-card{background:#1A1A1A;border:1px solid rgba(255,255,255,0.09);border-radius:10px;
-    overflow:hidden;cursor:pointer;transition:border-color .12s;flex-shrink:0}
-  .kb-card:hover{border-color:rgba(107,175,69,0.5)}
-  .kb-card.dragging{opacity:0.35}
-  .kb-card.drag-above{border-top:2px solid #6BAF45}
-  .kb-card.drag-below{border-bottom:2px solid #6BAF45}
-  .kb-cover{height:126px;overflow:hidden;background:#111}
-  .kb-cover img{width:100%;height:100%;object-fit:cover;display:block}
-  .kb-body{padding:10px 12px}
-  .kb-row1{display:flex;align-items:center;gap:5px;margin-bottom:6px}
-  .kb-cdot{width:6px;height:6px;border-radius:50%;flex-shrink:0;display:inline-block}
-  .kb-cname{font-size:10px;color:#888;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .kb-fbadge{font-size:9px;padding:1px 5px;border-radius:100px;background:rgba(107,175,69,.12);
-    color:#6BAF45;border:1px solid rgba(107,175,69,.3);font-weight:700;flex-shrink:0}
-  .kb-title{font-size:12.5px;font-weight:600;color:#E8E8E8;line-height:1.35;margin-bottom:4px;
-    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  .kb-desc{font-size:11px;color:#666;line-height:1.3;margin-bottom:5px;
-    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  .kb-foot{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
-  .kb-av{width:18px;height:18px;border-radius:50%;background:#6366f1;display:flex;
-    align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0}
-  .kb-avname{font-size:10px;color:#666;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .kb-attc{font-size:10px;color:#666;display:flex;align-items:center;gap:3px}
-  .kb-more{width:100%;padding:8px;font-size:11px;color:#6BAF45;background:rgba(107,175,69,.06);
-    border:1px dashed rgba(107,175,69,.3);border-radius:8px;cursor:pointer;text-align:center;
-    transition:background .15s;flex-shrink:0}
-  .kb-more:hover{background:rgba(107,175,69,.12)}
-  .av-wrap{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.94);display:flex;flex-direction:column}
-  .av-top{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;flex-shrink:0}
-  .av-main{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:0 56px}
-  .av-main img{max-width:100%;max-height:calc(100vh - 160px);object-fit:contain;border-radius:8px}
-  .av-main video{max-width:100%;max-height:calc(100vh - 160px);border-radius:8px;background:#000}
-  .av-main iframe{width:min(860px,90vw);height:calc(100vh - 180px);border:none;border-radius:8px;background:#fff}
-  .av-strip{display:flex;gap:7px;padding:8px 20px;overflow-x:auto;flex-shrink:0;justify-content:center}
-  .av-thumb{width:46px;height:46px;border-radius:7px;overflow:hidden;border:2px solid transparent;cursor:pointer;flex-shrink:0;transition:all .12s}
-  .av-thumb.on{border-color:#6BAF45;transform:scale(1.1)}
-  .av-thumb img,.av-thumb video{width:100%;height:100%;object-fit:cover;display:block}
-  .av-thumb-ico{width:100%;height:100%;background:#222;display:flex;align-items:center;justify-content:center;font-size:16px}
-  .av-nav{position:fixed;top:50%;transform:translateY(-50%);width:40px;height:40px;border-radius:50%;
-    background:rgba(255,255,255,.1);border:none;color:#fff;font-size:22px;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;z-index:1;transition:background .15s}
-  .av-nav:hover{background:rgba(255,255,255,.2)}
+const PAGE_SIZE = 20
+let styleInjected = false
+
+function injectKanbanStyles() {
+  if (styleInjected) return
+  styleInjected = true
+  const style = document.createElement('style')
+  style.textContent = `
+    .kb-board { overflow-x: auto; overflow-y: hidden; scrollbar-width: auto; }
+    .kb-board::-webkit-scrollbar { height: 16px; }
+    .kb-board::-webkit-scrollbar-track { background: var(--bg2); border-radius: 8px; }
+    .kb-board::-webkit-scrollbar-thumb { background: var(--bg5); border-radius: 8px; border: 3px solid var(--bg2); }
+    .kb-board::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+    .kb-column { min-height: 0; display: flex; flex-direction: column; }
+    .kb-column-body { min-height: 0; overflow-y: auto; }
+    .kb-card { content-visibility: auto; contain-intrinsic-size: 220px; }
+    .kb-drop-line { height: 2px; background: var(--green); border-radius: 2px; margin: 2px 0; box-shadow: 0 0 6px var(--green-glow); }
   `
-  document.head.appendChild(s)
-}())
+  document.head.appendChild(style)
+}
 
-/* ── Attachment Viewer ────────────────────────────────── */
-function AttViewer({ files, idx: ini, onClose }) {
-  const [idx, setIdx] = useState(ini)
-  const f = files[idx]
+export default function KanbanPage() {
+  const { clients, collaborators, pushToast } = useApp()
+  const { user, isFreelancer } = useAuth()
+  const [columns, setColumns] = useState([])
+  const [cards, setCards] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [visibleCounts, setVisibleCounts] = useState({})
+  const [activeCard, setActiveCard] = useState(null)
+  const [newCardColumn, setNewCardColumn] = useState(null)
+  const [dragCardId, setDragCardId] = useState(null)
+  const [dragOver, setDragOver] = useState(null) // { columnId, cardId, side }
+  const boardRef = useRef(null)
+  const panState = useRef({ active: false, startX: 0, startScroll: 0 })
+
   useEffect(() => {
-    const h = e => {
-      if(e.key==='Escape') onClose()
-      if(e.key==='ArrowLeft') setIdx(i=>Math.max(0,i-1))
-      if(e.key==='ArrowRight') setIdx(i=>Math.min(files.length-1,i+1))
+    injectKanbanStyles()
+  }, [])
+
+  const loadBoard = useCallback(async () => {
+    setLoading(true)
+    const [{ data: cols }, { data: crds }] = await Promise.all([
+      supabase.from('kanban_columns').select('*').order('position'),
+      supabase.from('kanban_cards').select('*').order('position')
+    ])
+    setColumns(cols || [])
+    let visibleCards = crds || []
+    if (isFreelancer && user?.email) {
+      const { data: me } = await supabase.from('collaborators').select('id').eq('name', user.email).maybeSingle()
+      visibleCards = visibleCards.filter((c) => c.collaborator_id === me?.id)
     }
-    document.addEventListener('keydown',h)
-    return()=>document.removeEventListener('keydown',h)
-  },[files.length,onClose])
-  if(!f) return null
-  const ft=f.ft||'file'
-  return(
-    <div className="av-wrap" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="av-top">
-        <span style={{fontSize:13,fontWeight:600,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'60%'}}>{f.name}</span>
-        <div style={{display:'flex',gap:8}}>
-          <button style={{display:'flex',alignItems:'center',gap:6,padding:'6px 14px',borderRadius:8,background:'#6BAF45',color:'#000',fontSize:12,fontWeight:700,border:'none',cursor:'pointer'}} onClick={()=>forceDownload(f.url,f.name)}><Download size={13}/>Salvar</button>
-          <button style={{width:32,height:32,borderRadius:8,background:'rgba(255,255,255,.1)',border:'none',color:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}} onClick={onClose}><X size={15}/></button>
-        </div>
+    setCards(visibleCards)
+    setLoading(false)
+  }, [isFreelancer, user?.email])
+
+  useEffect(() => {
+    loadBoard()
+  }, [loadBoard])
+
+  const cardsByColumn = useMemo(() => {
+    const map = {}
+    columns.forEach((col) => {
+      map[col.id] = cards.filter((c) => c.column_id === col.id).sort((a, b) => a.position - b.position)
+    })
+    return map
+  }, [columns, cards])
+
+  function getVisibleCount(colId) {
+    return visibleCounts[colId] || PAGE_SIZE
+  }
+
+  async function persistPositions(columnId, orderedCards) {
+    const updates = orderedCards.map((c, i) => ({ id: c.id, position: i, column_id: columnId }))
+    setCards((prev) => {
+      const others = prev.filter((c) => !orderedCards.find((o) => o.id === c.id))
+      const updated = orderedCards.map((c, i) => ({ ...c, position: i, column_id: columnId }))
+      return [...others, ...updated]
+    })
+    for (const u of updates) {
+      await supabase.from('kanban_cards').update({ position: u.position, column_id: u.column_id }).eq('id', u.id)
+    }
+  }
+
+  async function handleDrop(targetColumnId, targetCardId) {
+    if (!dragCardId) return
+    const dragged = cards.find((c) => c.id === dragCardId)
+    if (!dragged) return
+
+    const originColumnId = dragged.column_id
+    const targetList = cardsByColumn[targetColumnId]?.filter((c) => c.id !== dragCardId) || []
+
+    let insertIndex = targetList.length
+    if (targetCardId) {
+      const idx = targetList.findIndex((c) => c.id === targetCardId)
+      insertIndex = dragOver?.side === 'below' ? idx + 1 : idx
+    }
+
+    const newTargetList = [...targetList]
+    newTargetList.splice(insertIndex, 0, { ...dragged, column_id: targetColumnId })
+
+    await persistPositions(targetColumnId, newTargetList)
+
+    if (originColumnId !== targetColumnId) {
+      const originList = cardsByColumn[originColumnId]?.filter((c) => c.id !== dragCardId) || []
+      await persistPositions(originColumnId, originList)
+
+      if (dragged.collaborator_id) {
+        const collab = collaborators.find((c) => c.id === dragged.collaborator_id)
+        const targetCol = columns.find((c) => c.id === targetColumnId)
+        if (collab?.email && collab.email !== user?.email) {
+          await notify(collab.email, {
+            type: 'card_moved',
+            title: `Card movido: ${dragged.title}`,
+            body: `Foi movido para "${targetCol?.label}"`,
+            card_id: dragged.id
+          })
+        }
+      }
+    }
+
+    setDragCardId(null)
+    setDragOver(null)
+  }
+
+  async function notify(userEmail, payload) {
+    await supabase.from('notifications').insert({ user_email: userEmail, read: false, ...payload })
+  }
+
+  function startPan(e) {
+    if (e.target.closest('.kb-card') || e.target.closest('button') || e.target.closest('input')) return
+    panState.current = { active: true, startX: e.clientX, startScroll: boardRef.current.scrollLeft }
+    boardRef.current.style.cursor = 'grabbing'
+  }
+  function movePan(e) {
+    if (!panState.current.active) return
+    const dx = e.clientX - panState.current.startX
+    boardRef.current.scrollLeft = panState.current.startScroll - dx
+  }
+  function endPan() {
+    panState.current.active = false
+    if (boardRef.current) boardRef.current.style.cursor = 'grab'
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-24">
+        <Spinner />
       </div>
-      {idx>0&&<button className="av-nav" style={{left:12}} onClick={()=>setIdx(i=>i-1)}>‹</button>}
-      {idx<files.length-1&&<button className="av-nav" style={{right:12}} onClick={()=>setIdx(i=>i+1)}>›</button>}
-      <div className="av-main">
-        {ft==='image'&&<img src={f.url} alt={f.name}/>}
-        {ft==='video'&&<video src={f.url} controls autoPlay/>}
-        {ft==='pdf'&&<iframe src={f.url} title={f.name}/>}
-        {!['image','video','pdf'].includes(ft)&&(
-          <div style={{textAlign:'center'}}>
-            <div style={{fontSize:72,marginBottom:16}}>{FILE_ICONS[ft]||'📎'}</div>
-            <p style={{color:'#fff',fontWeight:600,marginBottom:12}}>{f.name}</p>
-            <button style={{display:'flex',alignItems:'center',gap:8,margin:'0 auto',padding:'8px 20px',borderRadius:8,background:'#6BAF45',color:'#000',fontWeight:700,border:'none',cursor:'pointer'}} onClick={()=>forceDownload(f.url,f.name)}><Download size={14}/>Baixar</button>
-          </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-57px)] p-4 md:p-6">
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
+        <h1 className="text-xl font-semibold text-text">Fluxo</h1>
+        <Button icon={Plus} onClick={() => setNewCardColumn(columns[0]?.id || null)} disabled={!columns.length}>
+          Nova demanda
+        </Button>
+      </div>
+
+      <div
+        ref={boardRef}
+        className="kb-board flex gap-6 flex-1 pb-4"
+        style={{ cursor: 'grab' }}
+        onMouseDown={startPan}
+        onMouseMove={movePan}
+        onMouseUp={endPan}
+        onMouseLeave={endPan}
+      >
+        {columns.map((col) => {
+          const allCards = cardsByColumn[col.id] || []
+          const visibleCount = getVisibleCount(col.id)
+          const visibleCards = allCards.slice(0, visibleCount)
+
+          return (
+            <div
+              key={col.id}
+              className="kb-column flex-shrink-0 w-[220px] md:w-[260px] bg-bg2 rounded-card border border-border h-full"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault()
+                handleDrop(col.id, null)
+              }}
+            >
+              <div className="flex items-center justify-between px-3 py-3 flex-shrink-0 border-b border-border">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: col.color || 'var(--green)' }} />
+                  <span className="text-sm font-medium text-text truncate">{col.label}</span>
+                  <span className="text-xs text-text3">{allCards.length}</span>
+                </div>
+                <button onClick={() => setNewCardColumn(col.id)} className="text-text3 hover:text-green">
+                  <Plus size={16} />
+                </button>
+              </div>
+
+              <div className="kb-column-body flex-1 p-2 flex flex-col gap-2">
+                {visibleCards.map((card) => (
+                  <div key={card.id}>
+                    {dragOver?.columnId === col.id && dragOver?.cardId === card.id && dragOver?.side === 'above' && (
+                      <div className="kb-drop-line" />
+                    )}
+                    <CardItem
+                      card={card}
+                      client={clients.find((c) => c.id === card.client_id)}
+                      collaborator={collaborators.find((c) => c.id === card.collaborator_id)}
+                      draggable
+                      onDragStart={() => setDragCardId(card.id)}
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        const side = e.clientY - rect.top < rect.height / 2 ? 'above' : 'below'
+                        setDragOver({ columnId: col.id, cardId: card.id, side })
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        handleDrop(col.id, card.id)
+                      }}
+                      onClick={() => setActiveCard(card)}
+                    />
+                    {dragOver?.columnId === col.id && dragOver?.cardId === card.id && dragOver?.side === 'below' && (
+                      <div className="kb-drop-line" />
+                    )}
+                  </div>
+                ))}
+
+                {allCards.length > visibleCount && (
+                  <button
+                    onClick={() => setVisibleCounts((v) => ({ ...v, [col.id]: visibleCount + PAGE_SIZE }))}
+                    className="text-xs text-text3 hover:text-green py-2 text-center"
+                  >
+                    Ver mais {Math.min(PAGE_SIZE, allCards.length - visibleCount)} ↓
+                  </button>
+                )}
+
+                {allCards.length === 0 && (
+                  <p className="text-xs text-text3 text-center py-6">Nenhum card</p>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {newCardColumn && (
+        <NewCardModal
+          defaultColumnId={newCardColumn}
+          columns={columns}
+          clients={clients}
+          collaborators={collaborators}
+          countInColumn={(colId) => (cardsByColumn[colId] || []).length}
+          onClose={() => setNewCardColumn(null)}
+          onCreated={(card) => {
+            setCards((c) => [...c, card])
+            setNewCardColumn(null)
+          }}
+        />
+      )}
+
+      {activeCard && (
+        <CardDetailModal
+          card={cards.find((c) => c.id === activeCard.id) || activeCard}
+          columns={columns}
+          clients={clients}
+          collaborators={collaborators}
+          onClose={() => setActiveCard(null)}
+          onUpdate={(patch) => setCards((prev) => prev.map((c) => (c.id === activeCard.id ? { ...c, ...patch } : c)))}
+          onDelete={() => {
+            setCards((prev) => prev.filter((c) => c.id !== activeCard.id))
+            setActiveCard(null)
+          }}
+          notify={notify}
+        />
+      )}
+    </div>
+  )
+}
+
+function CardItem({ card, client, collaborator, onClick, ...dragProps }) {
+  const cover = card.attachments?.[0]
+  return (
+    <motion.div
+      whileHover={{ y: -1 }}
+      className="kb-card card p-2.5 cursor-pointer flex flex-col gap-2 bg-bg3"
+      onClick={onClick}
+      {...dragProps}
+    >
+      {cover?.url && cover.ft === 'image' && (
+        <img src={cover.url} alt="" loading="lazy" className="w-full h-[120px] object-cover rounded-input" />
+      )}
+      <div className="flex items-center gap-1.5 min-w-0">
+        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: client?.color || 'var(--green)' }} />
+        <span className="text-[11px] text-text3 truncate">{client?.name || 'Sem cliente'}</span>
+        {card.finalized_material_id && (
+          <Badge color="green" className="ml-auto flex-shrink-0">
+            <Check size={10} /> Enviado
+          </Badge>
         )}
       </div>
-      {files.length>1&&(
-        <div className="av-strip">
-          {files.map((a,i)=>(
-            <div key={i} className={`av-thumb ${i===idx?'on':''}`} onClick={()=>setIdx(i)}>
-              {a.ft==='image'?<img src={a.url} alt=""/>:<div className="av-thumb-ico">{FILE_ICONS[a.ft]||'📎'}</div>}
+      <p className="text-sm text-text font-medium line-clamp-2">{card.title}</p>
+      {card.description && <p className="text-xs text-text2 line-clamp-2">{card.description}</p>}
+      <div className="flex items-center justify-between mt-1">
+        {collaborator ? (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Avatar name={collaborator.name} size={18} />
+            <span className="text-[11px] text-text3 truncate">{collaborator.name}</span>
+          </div>
+        ) : (
+          <span />
+        )}
+        {card.attachments?.length > 0 && (
+          <span className="flex items-center gap-1 text-[11px] text-text3">
+            <Paperclip size={11} /> {card.attachments.length}
+          </span>
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
+function NewCardModal({ defaultColumnId, columns, clients, collaborators, countInColumn, onClose, onCreated }) {
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [columnId, setColumnId] = useState(defaultColumnId)
+  const [clientId, setClientId] = useState('')
+  const [collaboratorId, setCollaboratorId] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('kanban_cards')
+        .insert({
+          title,
+          description,
+          column_id: columnId,
+          client_id: clientId || null,
+          collaborator_id: collaboratorId || null,
+          attachments: [],
+          position: countInColumn(columnId)
+        })
+        .select()
+        .single()
+      if (error) throw error
+      onCreated(data)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Nova demanda">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <Field label="Título" value={title} onChange={(e) => setTitle(e.target.value)} required autoFocus />
+        <Select label="Coluna" value={columnId} onChange={(e) => setColumnId(e.target.value)}>
+          {columns.map((col) => (
+            <option key={col.id} value={col.id}>
+              {col.label}
+            </option>
+          ))}
+        </Select>
+        <Select label="Cliente" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+          <option value="">Sem cliente</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+        <Select label="Colaborador" value={collaboratorId} onChange={(e) => setCollaboratorId(e.target.value)}>
+          <option value="">Sem colaborador</option>
+          {collaborators.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </Select>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" loading={saving}>
+            Criar
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpdate, onDelete, notify }) {
+  const { user } = useAuth()
+  const { pushToast } = useApp()
+  const [title, setTitle] = useState(card.title)
+  const [description, setDescription] = useState(card.description || '')
+  const [editingDescription, setEditingDescription] = useState(false)
+  const [comments, setComments] = useState([])
+  const [commentText, setCommentText] = useState('')
+  const [mentionQuery, setMentionQuery] = useState(null)
+  const [viewerIndex, setViewerIndex] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [finalizeOpen, setFinalizeOpen] = useState(false)
+  const textareaRef = useRef(null)
+
+  const client = clients.find((c) => c.id === card.client_id)
+
+  const loadComments = useCallback(async () => {
+    const { data } = await supabase
+      .from('kanban_comments')
+      .select('*')
+      .eq('card_id', card.id)
+      .order('created_at', { ascending: true })
+    setComments(data || [])
+  }, [card.id])
+
+  useEffect(() => {
+    loadComments()
+  }, [loadComments])
+
+  async function saveField(patch) {
+    onUpdate(patch)
+    await supabase.from('kanban_cards').update(patch).eq('id', card.id)
+  }
+
+  function handleDescriptionChange(e) {
+    setDescription(e.target.value)
+    e.target.style.height = 'auto'
+    e.target.style.height = e.target.scrollHeight + 'px'
+  }
+
+  function handleCommentChange(e) {
+    const val = e.target.value
+    setCommentText(val)
+    const cursor = e.target.selectionStart
+    const upToCursor = val.slice(0, cursor)
+    const match = upToCursor.match(/@([a-zA-Z0-9_ ]*)$/)
+    setMentionQuery(match ? match[1] : null)
+  }
+
+  function insertMention(name) {
+    const cursor = textareaRef.current.selectionStart
+    const before = commentText.slice(0, cursor).replace(/@([a-zA-Z0-9_ ]*)$/, `@${name} `)
+    const after = commentText.slice(cursor)
+    setCommentText(before + after)
+    setMentionQuery(null)
+    textareaRef.current.focus()
+  }
+
+  async function submitComment() {
+    if (!commentText.trim()) return
+    const { data, error } = await supabase
+      .from('kanban_comments')
+      .insert({ card_id: card.id, user_email: user.email, content: commentText })
+      .select()
+      .single()
+    if (error) return
+    setComments((c) => [...c, data])
+
+    const mentioned = collaborators.filter((c) => commentText.includes(`@${c.name}`))
+    for (const m of mentioned) {
+      if (!m.email || m.email === user.email) continue
+      await notify(m.email, {
+        type: 'mention',
+        title: `${user.email} mencionou você`,
+        body: commentText,
+        card_id: card.id
+      })
+    }
+    if (card.collaborator_id) {
+      const owner = collaborators.find((c) => c.id === card.collaborator_id)
+      if (owner?.email && owner.email !== user.email) {
+        await notify(owner.email, {
+          type: 'comment',
+          title: `Novo comentário em "${card.title}"`,
+          body: commentText,
+          card_id: card.id
+        })
+      }
+    }
+
+    setCommentText('')
+  }
+
+  async function editComment(id, content) {
+    const { error } = await supabase.from('kanban_comments').update({ content }).eq('id', id)
+    if (error) return
+    setComments((c) => c.map((x) => (x.id === id ? { ...x, content } : x)))
+  }
+
+  async function deleteComment(id) {
+    const { error } = await supabase.from('kanban_comments').delete().eq('id', id)
+    if (error) return
+    setComments((c) => c.filter((x) => x.id !== id))
+  }
+
+  async function handleUpload(e) {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    setUploading(true)
+    try {
+      const uploaded = []
+      for (const file of files) {
+        const url = await uploadFile(file, `kanban/${card.id}`)
+        uploaded.push({ url, name: sanitizeFileName(file.name), ft: fileCategory(file.type) })
+      }
+      const attachments = [...(card.attachments || []), ...uploaded]
+      await saveField({ attachments })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleFinalize({ type, description: finalDesc, files }) {
+    const { data: material, error } = await supabase
+      .from('materials')
+      .insert({
+        client_id: card.client_id,
+        description: finalDesc || card.title,
+        type,
+        date: new Date().toISOString().slice(0, 10),
+        collaborator_id: card.collaborator_id
+      })
+      .select()
+      .single()
+    if (error) return
+
+    for (const file of files) {
+      const url = await uploadFile(file, `materials/${material.id}`)
+      await supabase.from('files').insert({ material_id: material.id, url, name: file.name, file_type: fileCategory(file.type) })
+    }
+
+    await saveField({ finalized_material_id: material.id })
+    setFinalizeOpen(false)
+    pushToast({ message: 'Card finalizado e enviado para Materiais.', type: 'success' })
+  }
+
+  async function handleUndoFinalize() {
+    await saveField({ finalized_material_id: null })
+  }
+
+  const mentionCandidates = mentionQuery !== null
+    ? collaborators.filter((c) => c.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0, 5)
+    : []
+
+  return (
+    <Modal open onClose={onClose} title="Detalhes do card" size="xl">
+      <div className="grid md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 flex flex-col gap-4">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={() => title !== card.title && saveField({ title })}
+            className="text-lg font-semibold text-text bg-transparent border-none outline-none focus:bg-bg4 rounded-input px-1 -mx-1"
+          />
+
+          {editingDescription ? (
+            <div className="flex flex-col gap-2">
+              <textarea
+                value={description}
+                onChange={handleDescriptionChange}
+                placeholder="Descrição..."
+                rows={14}
+                autoFocus
+                className="input-base px-3 py-2 text-sm resize-y min-h-[280px]"
+              />
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    saveField({ description })
+                    setEditingDescription(false)
+                  }}
+                >
+                  Salvar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setDescription(card.description || '')
+                    setEditingDescription(false)
+                  }}
+                >
+                  Cancelar
+                </Button>
+              </div>
             </div>
+          ) : (
+            <div
+              onClick={() => setEditingDescription(true)}
+              className="cursor-text rounded-input hover:bg-bg4 px-3 py-2 -mx-3 transition-colors"
+            >
+              {description ? (
+                <TextWithPreviews text={description} collapsible />
+              ) : (
+                <span className="text-sm text-text3">Adicionar descrição...</span>
+              )}
+            </div>
+          )}
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-text2">Anexos</span>
+              <label className="text-xs text-green cursor-pointer flex items-center gap-1">
+                <Upload size={12} /> {uploading ? 'Enviando...' : 'Adicionar'}
+                <input type="file" multiple hidden onChange={handleUpload} disabled={uploading} />
+              </label>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {(card.attachments || []).map((a, i) => (
+                <button
+                  key={i}
+                  onClick={() => setViewerIndex(i)}
+                  className="aspect-square rounded-input overflow-hidden bg-bg4 flex items-center justify-center"
+                >
+                  {a.ft === 'image' ? (
+                    <img src={a.url} alt="" loading="lazy" className="w-full h-full object-cover" />
+                  ) : (
+                    <FileText size={20} className="text-text3" />
+                  )}
+                </button>
+              ))}
+              {(!card.attachments || card.attachments.length === 0) && (
+                <span className="text-xs text-text3 col-span-4">Nenhum anexo</span>
+              )}
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-4">
+            <span className="text-sm font-medium text-text2 mb-3 block">Comentários</span>
+            <div className="flex flex-col gap-3 max-h-56 overflow-y-auto mb-3">
+              {comments.map((c) => (
+                <CommentItem
+                  key={c.id}
+                  comment={c}
+                  canManage={c.user_email === user.email}
+                  onSave={(content) => editComment(c.id, content)}
+                  onDelete={() => deleteComment(c.id)}
+                />
+              ))}
+              {comments.length === 0 && <p className="text-xs text-text3">Nenhum comentário ainda.</p>}
+            </div>
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={commentText}
+                onChange={handleCommentChange}
+                placeholder="Escreva um comentário... use @ para mencionar"
+                rows={2}
+                className="input-base w-full px-3 py-2 text-sm resize-none pr-10"
+              />
+              <button
+                onClick={submitComment}
+                className="absolute right-2 bottom-2 text-green hover:text-green2"
+              >
+                <Send size={16} />
+              </button>
+              {mentionCandidates.length > 0 && (
+                <div className="absolute bottom-full mb-1 left-0 glass rounded-card overflow-hidden w-48 z-10">
+                  {mentionCandidates.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => insertMention(c.name)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text hover:bg-bg4 text-left"
+                    >
+                      <AtSign size={12} className="text-text3" />
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <Select
+            label="Coluna"
+            value={card.column_id}
+            onChange={(e) => saveField({ column_id: e.target.value })}
+          >
+            {columns.map((col) => (
+              <option key={col.id} value={col.id}>
+                {col.label}
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="Colaborador"
+            value={card.collaborator_id || ''}
+            onChange={(e) => saveField({ collaborator_id: e.target.value || null })}
+          >
+            <option value="">Sem colaborador</option>
+            {collaborators.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+
+          {client && (
+            <div className="text-sm text-text2">
+              Cliente: <span className="text-text">{client.name}</span>
+            </div>
+          )}
+
+          <div className="border-t border-border pt-4 flex flex-col gap-2">
+            {card.finalized_material_id ? (
+              <>
+                <Badge color="green" className="justify-center py-1.5">
+                  <CheckCircle2 size={12} /> Enviado
+                </Badge>
+                <Button variant="outline" icon={Undo2} onClick={handleUndoFinalize}>
+                  Desfazer
+                </Button>
+              </>
+            ) : (
+              <Button icon={Send} onClick={() => setFinalizeOpen(true)}>
+                Finalizar
+              </Button>
+            )}
+            <Button
+              variant="danger"
+              icon={Trash2}
+              onClick={async () => {
+                await supabase.from('kanban_cards').delete().eq('id', card.id)
+                onDelete()
+              }}
+            >
+              Excluir card
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {viewerIndex !== null && (
+        <AttachmentViewer
+          attachments={card.attachments || []}
+          index={viewerIndex}
+          onClose={() => setViewerIndex(null)}
+          onNavigate={setViewerIndex}
+        />
+      )}
+
+      {finalizeOpen && (
+        <FinalizeModal onClose={() => setFinalizeOpen(false)} onSubmit={handleFinalize} defaultDescription={card.title} />
+      )}
+    </Modal>
+  )
+}
+
+function CommentItem({ comment, canManage, onSave, onDelete }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(comment.content)
+
+  function handleSave() {
+    if (!draft.trim()) return
+    onSave(draft)
+    setEditing(false)
+  }
+
+  return (
+    <div className="group flex gap-2">
+      <Avatar name={comment.user_email} size={26} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-text3">{comment.user_email}</p>
+          {canManage && !editing && (
+            <div className="opacity-0 group-hover:opacity-100 flex items-center gap-2">
+              <button onClick={() => setEditing(true)} className="text-text3 hover:text-green">
+                <Pencil size={11} />
+              </button>
+              <button onClick={onDelete} className="text-text3 hover:text-red">
+                <Trash2 size={11} />
+              </button>
+            </div>
+          )}
+        </div>
+        {editing ? (
+          <div className="flex flex-col gap-1.5 mt-1">
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={2}
+              autoFocus
+              className="input-base w-full px-2.5 py-1.5 text-sm resize-none"
+            />
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleSave}>
+                Salvar
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setDraft(comment.content)
+                  setEditing(false)
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <TextWithPreviews text={comment.content} collapsible />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AttachmentViewer({ attachments, index, onClose, onNavigate }) {
+  const file = attachments[index]
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowRight' && index < attachments.length - 1) onNavigate(index + 1)
+      if (e.key === 'ArrowLeft' && index > 0) onNavigate(index - 1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [index, attachments.length, onClose, onNavigate])
+
+  if (!file) return null
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/90 flex flex-col" onClick={onClose}>
+      <div className="flex items-center justify-between p-4" onClick={(e) => e.stopPropagation()}>
+        <span className="text-white/80 text-sm truncate">{file.name}</span>
+        <div className="flex items-center gap-3">
+          <button onClick={() => downloadBlob(file.url, file.name)} className="text-white/70 hover:text-white">
+            <Download size={20} />
+          </button>
+          <button onClick={onClose} className="text-white/70 hover:text-white">
+            <X size={22} />
+          </button>
+        </div>
+      </div>
+      <div className="flex-1 flex items-center justify-center relative px-12">
+        {index > 0 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onNavigate(index - 1)
+            }}
+            className="absolute left-2 text-white/60 hover:text-white"
+          >
+            <ChevronLeft size={32} />
+          </button>
+        )}
+        {file.ft === 'image' && (
+          <img src={file.url} alt="" onClick={(e) => e.stopPropagation()} className="max-h-[75vh] max-w-full object-contain" />
+        )}
+        {file.ft === 'video' && (
+          <video src={file.url} controls onClick={(e) => e.stopPropagation()} className="max-h-[75vh] max-w-full" />
+        )}
+        {file.ft === 'pdf' && (
+          <iframe src={file.url} title={file.name} onClick={(e) => e.stopPropagation()} className="w-full h-[75vh] bg-white" />
+        )}
+        {file.ft !== 'image' && file.ft !== 'video' && file.ft !== 'pdf' && (
+          <div className="flex flex-col items-center gap-3 text-white" onClick={(e) => e.stopPropagation()}>
+            <FileText size={48} />
+            <Button onClick={() => downloadBlob(file.url, file.name)}>Baixar arquivo</Button>
+          </div>
+        )}
+        {index < attachments.length - 1 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onNavigate(index + 1)
+            }}
+            className="absolute right-2 text-white/60 hover:text-white"
+          >
+            <ChevronRight size={32} />
+          </button>
+        )}
+      </div>
+      {attachments.length > 1 && (
+        <div className="flex gap-2 justify-center p-4 overflow-x-auto" onClick={(e) => e.stopPropagation()}>
+          {attachments.map((a, i) => (
+            <button
+              key={i}
+              onClick={() => onNavigate(i)}
+              className={`w-14 h-14 rounded-input overflow-hidden border-2 flex-shrink-0 ${
+                i === index ? 'border-green' : 'border-transparent opacity-60'
+              }`}
+            >
+              {a.ft === 'image' ? (
+                <img src={a.url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-bg4 flex items-center justify-center">
+                  <FileText size={16} className="text-text3" />
+                </div>
+              )}
+            </button>
           ))}
         </div>
       )}
@@ -133,291 +929,46 @@ function AttViewer({ files, idx: ini, onClose }) {
   )
 }
 
-/* ── Card Detail ──────────────────────────────────────── */
-function CardDetail({card:ini,columns,clients,collabs,isAdmin,onClose,onUpdate,onDelete}){
-  const {showToast}=useApp()
-  const [card,setCard]=useState({...ini})
-  const [viewer,setViewer]=useState(null)
-  const [upl,setUpl]=useState(false)
-  const save=async(field,value)=>{
-    const u={...card,[field]:value};setCard(u);onUpdate(u)
-    await supabase.from('kanban_cards').update({[field]:value}).eq('id',card.id)
-  }
-  const handleFiles=async(files)=>{
-    setUpl(true)
-    const atts=[...(card.attachments||[])]
-    for(const f of files){
-      const safe=f.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9._-]/g,'_')
-      const path=`kanban/${card.client_id}/${card.id}/${Date.now()}_${safe}`
-      const{error}=await supabase.storage.from('uploads').upload(path,f,{upsert:true})
-      if(!error){
-        const{data}=supabase.storage.from('uploads').getPublicUrl(path)
-        const ft=f.type.startsWith('video')?'video':f.type==='application/pdf'?'pdf':f.type.startsWith('image')?'image':'file'
-        atts.push({url:data.publicUrl,name:f.name,ft})
-      }
-    }
-    await save('attachments',atts);setUpl(false);showToast('Anexo(s) adicionado(s)!')
-  }
-  const atts=card.attachments||[]
-  return(
-    <>
-      <Modal open title={card.title} onClose={onClose} width="max-w-xl">
-        <Field label="Título"><input className="input" value={card.title} onChange={e=>setCard(p=>({...p,title:e.target.value}))} onBlur={e=>save('title',e.target.value)}/></Field>
-        <Field label="Descrição">
-          <textarea className="input resize-none" rows={3} value={card.description||''} style={{overflow:'hidden'}}
-            onChange={e=>{setCard(p=>({...p,description:e.target.value}));e.target.style.height='auto';e.target.style.height=e.target.scrollHeight+'px'}}
-            onBlur={e=>save('description',e.target.value)}/>
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Coluna"><select className="input" value={card.column_id} onChange={e=>save('column_id',e.target.value)}>{columns.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></Field>
-          <Field label="Responsável"><select className="input" value={card.collaborator_id||''} onChange={e=>save('collaborator_id',e.target.value||null)}><option value="">— Nenhum —</option>{collabs.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-        </div>
-        <div style={{marginTop:8}}>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-            <span style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.07em',color:'#555'}}>Anexos {atts.length>0&&`(${atts.length})`}</span>
-            <label style={{cursor:'pointer',fontSize:12,color:'#888',display:'flex',alignItems:'center',gap:4}} className="hover:text-green transition-colors">
-              <input type="file" multiple className="hidden" onChange={e=>handleFiles(Array.from(e.target.files))} accept="image/*,video/*,application/pdf,.doc,.docx,.ppt,.pptx"/>
-              {upl?'⏳ Enviando...':'📎 Adicionar'}
-            </label>
-          </div>
-          {atts.length===0
-            ?<label style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'1px dashed rgba(255,255,255,0.11)',borderRadius:10,padding:14,cursor:'pointer',fontSize:12,color:'#555',transition:'border-color .15s,color .15s'}} className="hover:border-green hover:text-green">
-              <input type="file" multiple className="hidden" onChange={e=>handleFiles(Array.from(e.target.files))}/>
-              📎 Clique para adicionar arquivos
-            </label>
-            :<div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
-              {atts.map((a,i)=>(
-                <div key={i} style={{position:'relative',aspectRatio:'1',borderRadius:8,overflow:'hidden',border:'1px solid rgba(255,255,255,0.08)',cursor:'pointer',background:'#1A1A1A'}} className="group hover:border-green transition-colors" onClick={()=>setViewer({files:atts,idx:i})}>
-                  {a.ft==='image'&&<img src={a.url} style={{width:'100%',height:'100%',objectFit:'cover'}} loading="lazy" alt=""/>}
-                  {a.ft==='video'&&<video src={a.url} muted preload="metadata" style={{width:'100%',height:'100%',objectFit:'cover'}}/>}
-                  {!['image','video'].includes(a.ft)&&<div style={{width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4}}><span style={{fontSize:24}}>{FILE_ICONS[a.ft]||'📎'}</span><span style={{fontSize:9,color:'#666'}}>{(a.name||'').split('.').pop().toUpperCase()}</span></div>}
-                  <div style={{position:'absolute',bottom:0,left:0,right:0,background:'rgba(0,0,0,.65)',padding:'3px 5px'}} className="opacity-0 group-hover:opacity-100 transition-opacity"><p style={{fontSize:9,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.name}</p></div>
-                  {isAdmin&&<button style={{position:'absolute',top:3,right:3,width:16,height:16,borderRadius:4,background:'rgba(0,0,0,.7)',border:'none',color:'#fff',fontSize:10,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}} className="opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all" onClick={e=>{e.stopPropagation();const n=[...atts];n.splice(i,1);save('attachments',n)}}>×</button>}
-                </div>
-              ))}
-            </div>}
-        </div>
-        {isAdmin&&(
-          <div className="mt-5 pt-4 border-t border-border flex justify-between">
-            <Button variant="red" size="sm" onClick={()=>supabase.from('kanban_cards').delete().eq('id',card.id).then(()=>{onDelete(card.id);showToast('Demanda excluída')})}><Trash2 size={13}/>Excluir</Button>
-            {card.finalized_material_id
-              ?<div className="flex items-center gap-2 text-xs text-green font-medium">✅ Enviado <button className="text-text-3 hover:text-text ml-1" onClick={()=>save('finalized_material_id',null)}>Desfazer</button></div>
-              :<Button variant="ghost" size="sm" onClick={()=>showToast('Finalizar: em breve!')}>📤 Finalizar</Button>}
-          </div>
-        )}
-      </Modal>
-      <AnimatePresence>{viewer&&<AttViewer files={viewer.files} idx={viewer.idx} onClose={()=>setViewer(null)}/>}</AnimatePresence>
-    </>
-  )
-}
+function FinalizeModal({ onClose, onSubmit, defaultDescription }) {
+  const [type, setType] = useState('Post')
+  const [description, setDescription] = useState(defaultDescription || '')
+  const [files, setFiles] = useState([])
+  const [saving, setSaving] = useState(false)
 
-/* ── New Card Modal ───────────────────────────────────── */
-function NewCard({open,defaultColId,columns,clients,collabs,onClose,onCreated}){
-  const [f,setF]=useState({title:'',desc:'',colId:'',clientId:'',collabId:''})
-  const [loading,setLoading]=useState(false)
-  const {showToast}=useApp()
-  useEffect(()=>{if(defaultColId)setF(p=>({...p,colId:defaultColId}))},[defaultColId])
-  const submit=async()=>{
-    if(!f.title||!f.clientId){showToast('Preencha título e cliente','error');return}
-    setLoading(true)
-    const{data,error}=await supabase.from('kanban_cards').insert({title:f.title,description:f.desc,column_id:f.colId,client_id:f.clientId,collaborator_id:f.collabId||null,attachments:[],position:0}).select().single()
-    setLoading(false)
-    if(error){showToast('Erro ao criar','error');return}
-    onCreated(data);onClose()
-    setF({title:'',desc:'',colId:defaultColId||'',clientId:'',collabId:''})
-    showToast('Demanda criada!')
-  }
-  return(
-    <Modal open={open} onClose={onClose} title="Nova demanda">
-      <Field label="Cliente *"><select className="input" value={f.clientId} onChange={e=>setF(p=>({...p,clientId:e.target.value}))}><option value="">— Selecionar —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-      <Field label="Título *"><input className="input" value={f.title} onChange={e=>setF(p=>({...p,title:e.target.value}))} placeholder="Ex: Post de aniversário" autoFocus/></Field>
-      <Field label="Descrição" optional><textarea className="input resize-none" rows={3} value={f.desc} onChange={e=>setF(p=>({...p,desc:e.target.value}))}/></Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Coluna"><select className="input" value={f.colId} onChange={e=>setF(p=>({...p,colId:e.target.value}))}>{columns.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></Field>
-        <Field label="Responsável" optional><select className="input" value={f.collabId} onChange={e=>setF(p=>({...p,collabId:e.target.value}))}><option value="">— Nenhum —</option>{collabs.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-      </div>
-      <div className="flex gap-2 justify-end mt-2"><Button variant="ghost" onClick={onClose}>Cancelar</Button><Button variant="green" loading={loading} onClick={submit}>Criar demanda</Button></div>
-    </Modal>
-  )
-}
-
-/* ── Main ─────────────────────────────────────────────── */
-export default function KanbanPage(){
-  const {clients,collaborators:collabs}=useApp()
-  const {isAdmin}=useAuth()
-  const [columns,setColumns]=useState([])
-  const [cards,setCards]=useState([])
-  const [filter,setFilter]=useState('all')
-  const [sel,setSel]=useState(null)
-  const [newMod,setNewMod]=useState({open:false,colId:null})
-  const [loading,setLoading]=useState(true)
-  const [limits,setLimits]=useState({})
-  const BATCH=20
-  const boardRef=useRef(null)
-  const isPanning=useRef(false)
-  const panStart=useRef({x:0,sl:0})
-  const drag=useRef({})
-
-  useEffect(()=>{
-    Promise.all([
-      supabase.from('kanban_columns').select('*').order('position'),
-      supabase.from('kanban_cards').select('id,title,description,column_id,client_id,collaborator_id,attachments,position,finalized_material_id').order('position')
-    ]).then(([c,k])=>{
-      if(c.data)setColumns(c.data)
-      if(k.data)setCards(k.data)
-      setLoading(false)
-    })
-  },[])
-
-  const colCards=useCallback(colId=>
-    cards.filter(c=>c.column_id===colId&&(filter==='all'||c.client_id===filter))
-      .sort((a,b)=>(a.position??0)-(b.position??0))
-  ,[cards,filter])
-
-  // Drag helpers
-  const clearIndicators=()=>document.querySelectorAll('.kb-card.drag-above,.kb-card.drag-below').forEach(el=>el.classList.remove('drag-above','drag-below'))
-
-  const onDragStart=(e,cardId)=>{drag.current={cardId};setTimeout(()=>e.target.classList.add('dragging'),0)}
-  const onDragEnd=e=>{e.target.classList.remove('dragging');clearIndicators()}
-  const onCardOver=(e,targetId)=>{
-    if(drag.current.cardId===targetId)return
-    e.preventDefault();e.stopPropagation();clearIndicators()
-    const r=e.currentTarget.getBoundingClientRect()
-    e.currentTarget.classList.add(e.clientY<r.top+r.height/2?'drag-above':'drag-below')
-  }
-  const onColOver=e=>{e.preventDefault();e.currentTarget.classList.add('drag-over')}
-  const onColLeave=e=>{if(!e.currentTarget.contains(e.relatedTarget))e.currentTarget.classList.remove('drag-over')}
-
-  const onCardDrop=async(e,targetId)=>{
-    e.preventDefault();e.stopPropagation()
-    document.querySelectorAll('.kb-col.drag-over,.kb-card.drag-above,.kb-card.drag-below').forEach(el=>el.classList.remove('drag-over','drag-above','drag-below'))
-    const{cardId}=drag.current;drag.current={}
-    if(!cardId||cardId===targetId)return
-    const dragged=cards.find(c=>c.id===cardId)
-    const target=cards.find(c=>c.id===targetId)
-    if(!dragged||!target)return
-    const colId=target.column_id
-    const r=e.currentTarget.getBoundingClientRect()
-    const before=e.clientY<r.top+r.height/2
-    const cc=cards.filter(c=>c.column_id===colId&&c.id!==cardId).sort((a,b)=>(a.position??0)-(b.position??0))
-    const ti=cc.findIndex(c=>c.id===targetId)
-    cc.splice(before?ti:ti+1,0,{...dragged,column_id:colId})
-    const reordered=cc.map((c,i)=>({...c,position:i}))
-    setCards(p=>[...p.filter(c=>c.column_id!==colId&&c.id!==cardId),...reordered])
-    for(const c of reordered)supabase.from('kanban_cards').update({column_id:colId,position:c.position}).eq('id',c.id)
-  }
-
-  const onColDrop=async(e,colId)=>{
+  async function handleSubmit(e) {
     e.preventDefault()
-    document.querySelectorAll('.kb-col.drag-over').forEach(el=>el.classList.remove('drag-over'))
-    const{cardId}=drag.current;drag.current={}
-    if(!cardId)return
-    const dragged=cards.find(c=>c.id===cardId)
-    if(!dragged||dragged.column_id===colId)return
-    const max=cards.filter(c=>c.column_id===colId).reduce((m,c)=>Math.max(m,c.position??0),-1)
-    setCards(p=>p.map(c=>c.id===cardId?{...c,column_id:colId,position:max+1}:c))
-    supabase.from('kanban_cards').update({column_id:colId,position:max+1}).eq('id',cardId)
+    setSaving(true)
+    try {
+      await onSubmit({ type, description, files })
+    } finally {
+      setSaving(false)
+    }
   }
 
-  if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%'}}><Spinner/></div>
-
-  return(
-    <div className="kb-wrap">
-      <div className="kb-toolbar">
-        <select className="input" style={{width:'auto',fontSize:12}} value={filter} onChange={e=>setFilter(e.target.value)}>
-          <option value="all">Todos os clientes</option>
-          {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        {isAdmin&&<Button variant="green" size="sm" onClick={()=>setNewMod({open:true,colId:columns[0]?.id})}><Plus size={14}/>Nova demanda</Button>}
-      </div>
-
-      <div className="kb-board-wrap">
-        <div className="kb-board" ref={boardRef}
-          onMouseDown={e=>{
-            if(e.target.closest('.kb-card')||e.button!==0)return
-            isPanning.current=true;panStart.current={x:e.clientX,sl:boardRef.current.scrollLeft}
-            boardRef.current.classList.add('panning')
-          }}
-          onMouseMove={e=>{
-            if(!isPanning.current)return
-            boardRef.current.scrollLeft=panStart.current.sl-(e.clientX-panStart.current.x)
-          }}
-          onMouseUp={()=>{isPanning.current=false;boardRef.current?.classList.remove('panning')}}
-          onMouseLeave={()=>{isPanning.current=false;boardRef.current?.classList.remove('panning')}}>
-          {columns.map(col=>{
-            const all=colCards(col.id)
-            const lim=limits[col.id]||BATCH
-            const visible=all.slice(0,lim)
-            const hasMore=all.length>lim
-            return(
-              <div key={col.id} className="kb-col" onDragOver={onColOver} onDragLeave={onColLeave} onDrop={e=>onColDrop(e,col.id)}>
-                <div className="kb-col-head">
-                  <span style={{width:8,height:8,borderRadius:'50%',background:col.color,flexShrink:0,display:'inline-block'}}/>
-                  <span className="kb-col-label">{col.label}</span>
-                  <span className="kb-col-count">{all.length}</span>
-                </div>
-
-                {/* ← THIS IS THE KEY: flex:1 + min-height:0 + overflow-y:auto */}
-                <div className="kb-cards">
-                  {all.length===0&&<p style={{textAlign:'center',fontSize:11,color:'#666',padding:'20px 0'}}>Sem demandas</p>}
-                  {visible.map(card=>{
-                    const client=clients.find(c=>c.id===card.client_id)
-                    const collab=collabs.find(c=>c.id===card.collaborator_id)
-                    const atts=card.attachments||[]
-                    const cover=atts.find(a=>a.ft==='image')
-                    return(
-                      <div key={card.id} className="kb-card" draggable
-                        onDragStart={e=>onDragStart(e,card.id)} onDragEnd={onDragEnd}
-                        onDragOver={e=>onCardOver(e,card.id)}
-                        onDragLeave={clearIndicators}
-                        onDrop={e=>onCardDrop(e,card.id)}
-                        onClick={()=>setSel(card)}>
-                        {cover&&<div className="kb-cover"><img src={cover.url} loading="lazy" alt=""/></div>}
-                        <div className="kb-body">
-                          <div className="kb-row1">
-                            {client&&<span className="kb-cdot" style={{background:client.color}}/>}
-                            <span className="kb-cname">{client?.name||''}</span>
-                            {card.finalized_material_id&&<span className="kb-fbadge">✓</span>}
-                          </div>
-                          <p className="kb-title">{card.title}</p>
-                          {card.description&&<p className="kb-desc">{card.description}</p>}
-                          <div className="kb-foot">
-                            {collab
-                              ?<div style={{display:'flex',alignItems:'center',gap:5}}>
-                                  <div className="kb-av">{collab.name[0]}</div>
-                                  <span className="kb-avname">{collab.name}</span>
-                                </div>
-                              :<span/>}
-                            {atts.length>0&&<span className="kb-attc">📎 {atts.length}</span>}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                  {hasMore&&(
-                    <button className="kb-more" onClick={()=>setLimits(l=>({...l,[col.id]:(l[col.id]||BATCH)+BATCH}))}>
-                      Ver mais {all.length-lim} cards ↓
-                    </button>
-                  )}
-                </div>
-
-                <button className="kb-col-add" onClick={()=>setNewMod({open:true,colId:col.id})}>
-                  <Plus size={12}/>Adicionar
-                </button>
-              </div>
-            )
-          })}
+  return (
+    <Modal open onClose={onClose} title="Finalizar card">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <Select label="Tipo" value={type} onChange={(e) => setType(e.target.value)}>
+          <option>Post</option>
+          <option>Carrossel</option>
+          <option>Vídeo</option>
+          <option>Reels</option>
+          <option>Stories</option>
+        </Select>
+        <Field label="Descrição" value={description} onChange={(e) => setDescription(e.target.value)} />
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm text-text2 font-medium">Artes finais</span>
+          <input type="file" multiple required onChange={(e) => setFiles(Array.from(e.target.files))} className="text-sm text-text2" />
+        </label>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" loading={saving}>
+            Enviar
+          </Button>
         </div>
-      </div>
-
-      <NewCard open={newMod.open} defaultColId={newMod.colId} columns={columns} clients={clients} collabs={collabs}
-        onClose={()=>setNewMod({open:false,colId:null})} onCreated={card=>setCards(p=>[...p,card])}/>
-      <AnimatePresence>
-        {sel&&<CardDetail card={sel} columns={columns} clients={clients} collabs={collabs} isAdmin={isAdmin}
-          onClose={()=>setSel(null)}
-          onUpdate={u=>{setCards(p=>p.map(c=>c.id===u.id?u:c));setSel(u)}}
-          onDelete={id=>{setCards(p=>p.filter(c=>c.id!==id));setSel(null)}}/>}
-      </AnimatePresence>
-    </div>
+      </form>
+    </Modal>
   )
 }

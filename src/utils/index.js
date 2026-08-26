@@ -1,94 +1,134 @@
-// ─── Date Formatting ────────────────────────────────────────────────────────
-const DAYS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado']
-const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
-const MONTHS_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
-
-export const fmtDate = (d) => {
-  const dt = new Date(d + 'T12:00:00')
-  return `${DAYS[dt.getDay()]}, ${dt.getDate()} de ${MONTHS[dt.getMonth()]}`
-}
-export const fmtDateShort = (d) => {
-  const dt = new Date(d + 'T12:00:00')
-  return `${dt.getDate()} ${MONTHS_SHORT[dt.getMonth()]} ${dt.getFullYear()}`
-}
-export const fmtTime = (t) => t ? t.slice(0, 5) : ''
-export const dateStr = (d = new Date()) => d.toISOString().split('T')[0]
-export const timeAgo = (dateStr) => {
-  const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000)
-  if (diff < 60) return 'agora mesmo'
-  if (diff < 3600) return `há ${Math.floor(diff / 60)}min`
-  if (diff < 86400) return `há ${Math.floor(diff / 3600)}h`
-  return `há ${Math.floor(diff / 86400)} dia(s)`
+// Convencao ja usada nos dados existentes do Supabase: file_type/ft guarda a
+// categoria curta ("image", "video", "pdf", "doc"), nao o MIME completo do browser.
+export function fileCategory(mimeType) {
+  if (!mimeType) return 'doc'
+  if (mimeType.startsWith('image/')) return 'image'
+  if (mimeType.startsWith('video/')) return 'video'
+  if (mimeType === 'application/pdf') return 'pdf'
+  return 'doc'
 }
 
-// ─── File Utils ──────────────────────────────────────────────────────────────
-export const safeFileName = (name) =>
-  name.normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '')
-
-export const getFileType = (file) => {
-  const { type, name } = file
-  if (type.startsWith('video')) return 'video'
-  if (type === 'application/pdf' || name.toLowerCase().endsWith('.pdf')) return 'pdf'
-  if (type.includes('word') || /\.(doc|docx)$/i.test(name)) return 'word'
-  if (type.includes('presentation') || /\.(ppt|pptx)$/i.test(name)) return 'ppt'
-  if (type.includes('spreadsheet') || /\.(xls|xlsx)$/i.test(name)) return 'excel'
-  if (type.startsWith('image')) return 'image'
-  return 'file'
+export function formatDate(date, opts = {}) {
+  const d = typeof date === 'string' ? new Date(date) : date
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'long',
+    year: opts.year ? 'numeric' : undefined,
+    ...opts
+  }).format(d)
 }
 
-export const FILE_ICONS = { video:'🎬', pdf:'📄', word:'📝', ppt:'📊', excel:'📊', image:'🖼', file:'📎' }
-
-// ─── String Utils ────────────────────────────────────────────────────────────
-export const slugify = (str) => str.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-export const generateProtocol = () => {
-  const d = new Date()
-  const ymd = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`
-  return `PED-${ymd}-${Math.floor(1000 + Math.random() * 9000)}`
+export function formatDateLong(date) {
+  const d = typeof date === 'string' ? new Date(date) : date
+  const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(d)
+  const day = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'long' }).format(d)
+  return `${capitalize(weekday)}, ${day}`
 }
 
-// ─── Week Utils ──────────────────────────────────────────────────────────────
-export const getMondayOfWeek = (date = new Date()) => {
-  const d = new Date(date)
-  const day = d.getDay()
-  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day))
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-export const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r }
-
-// ─── Color ───────────────────────────────────────────────────────────────────
-export const PALETTE = ['#6BAF45','#3b82f6','#a855f7','#f97316','#ec4899','#eab308','#14b8a6','#ef4444','#64748b','#06b6d4']
-
-// ─── Storage Upload ──────────────────────────────────────────────────────────
-export const uploadFile = async (supabase, bucket, path, file) => {
-  const safePath = path.split('/').map(safeFileName).join('/')
-  const { error } = await supabase.storage.from(bucket).upload(safePath, file, { upsert: true })
-  if (error) throw error
-  const { data } = supabase.storage.from(bucket).getPublicUrl(safePath)
-  return data.publicUrl
+export function capitalize(str) {
+  if (!str) return ''
+  return str.charAt(0).toUpperCase() + str.slice(1)
 }
 
-export const dataURLtoBlob = (dataURL) => {
-  const arr = dataURL.split(','), mime = arr[0].match(/:(.*?);/)[1]
-  const bstr = atob(arr[1])
-  const u8 = new Uint8Array(bstr.length)
-  for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i)
-  return new Blob([u8], { type: mime })
+export function formatTime(time) {
+  if (!time) return ''
+  return time.slice(0, 5)
 }
 
-export const forceDownload = async (url, name) => {
-  try {
-    const res = await fetch(url)
-    const blob = await res.blob()
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = name
-    document.body.appendChild(a)
-    a.click()
-    setTimeout(() => { URL.revokeObjectURL(a.href); document.body.removeChild(a) }, 1000)
-  } catch { window.open(url, '_blank') }
+export function greeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Bom dia'
+  if (h < 18) return 'Boa tarde'
+  return 'Boa noite'
+}
+
+export function generateProtocol() {
+  const date = new Date()
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const rand = Math.floor(1000 + Math.random() * 9000)
+  return `PED-${y}${m}${d}-${rand}`
+}
+
+export function debounce(fn, delay = 300) {
+  let timer
+  return (...args) => {
+    clearTimeout(timer)
+    timer = setTimeout(() => fn(...args), delay)
+  }
+}
+
+export const URL_REGEX = /(https?:\/\/[^\s]+)/g
+
+export function extractUrls(text) {
+  if (!text) return []
+  return text.match(URL_REGEX) || []
+}
+
+export function downloadBlob(url, filename) {
+  return fetch(url)
+    .then((res) => res.blob())
+    .then((blob) => {
+      const blobUrl = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = filename || 'download'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(blobUrl)
+    })
+}
+
+export function initials(name) {
+  if (!name) return '?'
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+const PERIOD_RANGES = {
+  week: () => {
+    const now = new Date()
+    const day = now.getDay()
+    const diff = day === 0 ? 6 : day - 1
+    const start = new Date(now)
+    start.setDate(now.getDate() - diff)
+    start.setHours(0, 0, 0, 0)
+    return { start, end: now }
+  },
+  lastWeek: () => {
+    const { start } = PERIOD_RANGES.week()
+    const end = new Date(start)
+    end.setMilliseconds(-1)
+    const s2 = new Date(start)
+    s2.setDate(s2.getDate() - 7)
+    return { start: s2, end }
+  },
+  month: () => {
+    const now = new Date()
+    return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }
+  },
+  m3: () => {
+    const now = new Date()
+    const start = new Date(now)
+    start.setMonth(start.getMonth() - 3)
+    return { start, end: now }
+  },
+  m6: () => {
+    const now = new Date()
+    const start = new Date(now)
+    start.setMonth(start.getMonth() - 6)
+    return { start, end: now }
+  },
+  year: () => {
+    const now = new Date()
+    return { start: new Date(now.getFullYear(), 0, 1), end: now }
+  },
+  all: () => ({ start: null, end: null })
+}
+
+export function getPeriodRange(key) {
+  return (PERIOD_RANGES[key] || PERIOD_RANGES.all)()
 }

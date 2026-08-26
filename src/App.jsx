@@ -1,60 +1,91 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AnimatePresence } from 'framer-motion'
-import { AuthProvider, useAuth } from '@/contexts/AuthContext'
-import { AppProvider } from '@/contexts/AppContext'
-import Layout from '@/components/layout/Layout'
-import LoginPage from '@/pages/LoginPage'
-import DashboardPage from '@/pages/DashboardPage'
-import ClientPage from '@/pages/ClientPage'
-import KanbanPage from '@/pages/KanbanPage'
-import TodoPage from '@/pages/TodoPage'
-import SettingsPage from '@/pages/SettingsPage'
-import PublicBriefingPage from '@/pages/PublicBriefingPage'
-import AppLoader from '@/components/layout/AppLoader'
+import { useEffect, useState } from 'react'
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { SplashScreen } from './components/ui/SplashScreen'
+import { AppLoader } from './components/layout/AppLoader'
+import { Layout } from './components/layout/Layout'
+import { ToastContainer } from './components/ui'
+import { useAuth } from './contexts/AuthContext'
+import { useApp } from './contexts/AppContext'
+import { publicUrlFor } from './lib/supabase'
 
-function ProtectedRoute({ children, roles }) {
-  const { user, role, loading } = useAuth()
+import LoginPage from './pages/LoginPage'
+import DashboardPage from './pages/DashboardPage'
+import ClientPage from './pages/ClientPage'
+import KanbanPage from './pages/KanbanPage'
+import TodoPage from './pages/TodoPage'
+import SettingsPage from './pages/SettingsPage'
+import PublicBriefingPage from './pages/PublicBriefingPage'
+
+function ProtectedRoute({ children }) {
+  const { session, loading } = useAuth()
   if (loading) return <AppLoader />
-  if (!user) return <Navigate to="/login" replace />
-  if (roles && !roles.includes(role)) return <Navigate to="/" replace />
+  if (!session) return <Navigate to="/login" replace />
   return children
 }
 
-function AppRoutes() {
-  const { user, loading } = useAuth()
+function AdminRoute({ children }) {
+  const { isAdmin, loading } = useAuth()
   if (loading) return <AppLoader />
-
-  return (
-    <AnimatePresence mode="wait">
-      <Routes>
-        <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" replace />} />
-        <Route path="/form/:clientId" element={<PublicBriefingPage />} />
-        <Route path="/*" element={
-          <ProtectedRoute>
-            <Layout>
-              <Routes>
-                <Route index element={<DashboardPage />} />
-                <Route path="clients/:id" element={<ClientPage />} />
-                <Route path="kanban" element={<KanbanPage />} />
-                <Route path="todo" element={<TodoPage />} />
-                <Route path="settings" element={<ProtectedRoute roles={['admin']}><SettingsPage /></ProtectedRoute>} />
-              </Routes>
-            </Layout>
-          </ProtectedRoute>
-        } />
-      </Routes>
-    </AnimatePresence>
-  )
+  if (!isAdmin) return <Navigate to="/dashboard" replace />
+  return children
 }
 
 export default function App() {
+  const [splashDone, setSplashDone] = useState(() => sessionStorage.getItem('panda_splash_done') === '1')
+  const { loading: authLoading } = useAuth()
+  const { toasts, dismissToast, settings } = useApp()
+
+  function handleSplashDone() {
+    sessionStorage.setItem('panda_splash_done', '1')
+    setSplashDone(true)
+  }
+
+  useEffect(() => {
+    const faviconUrl = publicUrlFor(settings.favicon?.logo_url)
+    if (!faviconUrl) return
+    let link = document.querySelector('link[rel="icon"]')
+    if (!link) {
+      link = document.createElement('link')
+      link.rel = 'icon'
+      document.head.appendChild(link)
+    }
+    link.href = faviconUrl
+  }, [settings.favicon])
+
+  if (!splashDone) return <SplashScreen onDone={handleSplashDone} />
+  if (authLoading) return <AppLoader />
+
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppProvider>
-          <AppRoutes />
-        </AppProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/form/:clientId" element={<PublicBriefingPage />} />
+
+        <Route
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/clients/:id" element={<ClientPage />} />
+          <Route path="/kanban" element={<KanbanPage />} />
+          <Route path="/todo" element={<TodoPage />} />
+          <Route
+            path="/settings"
+            element={
+              <AdminRoute>
+                <SettingsPage />
+              </AdminRoute>
+            }
+          />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+    </>
   )
 }

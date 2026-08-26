@@ -1,184 +1,158 @@
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { useAuth } from '@/contexts/AuthContext'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Field } from '@/components/ui'
-import { supabase } from '@/lib/supabase'
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Sparkles } from 'lucide-react'
-
-const SAVED_KEY = 'panda_creds'
-const LOGIN_IMG_KEY = 'sys_login_image'
+import { motion } from 'framer-motion'
+import { LogIn, User } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
+import { useApp } from '../contexts/AppContext'
+import { Button, Field, Checkbox } from '../components/ui'
+import { publicUrlFor } from '../lib/supabase'
 
 export default function LoginPage() {
-  const { login, user } = useAuth()
+  const { login, getSavedSessions, removeSavedSession } = useAuth()
+  const { settings, pushToast } = useApp()
   const navigate = useNavigate()
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
-  const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [savedCreds, setSavedCreds] = useState(null)
-  const [loginImage, setLoginImage] = useState(() => localStorage.getItem(LOGIN_IMG_KEY) || '')
 
-  useEffect(() => {
-    if (user) navigate('/', { replace: true })
+  const savedSessions = getSavedSessions()
+  const loginBg = publicUrlFor(settings.login_bg_image?.logo_url)
+  const logoUrl = publicUrlFor(settings.system_logo?.logo_url)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
     try {
-      const saved = JSON.parse(localStorage.getItem(SAVED_KEY) || 'null')
-      if (saved) { setSavedCreds(saved); setEmail(saved.email); setPassword(saved.password) }
-    } catch {}
-  }, [user, navigate])
-
-  useEffect(() => {
-    supabase.from('settings').select('logo_url').eq('key', 'login_image').single().then(({ data }) => {
-      if (data?.logo_url) { setLoginImage(data.logo_url); localStorage.setItem(LOGIN_IMG_KEY, data.logo_url) }
-    })
-  }, [])
-
-  const handleLogin = async (e) => {
-    e?.preventDefault()
-    if (!email || !password) { setError('Preencha e-mail e senha'); return }
-    setLoading(true); setError('')
-    try {
-      const { role } = await login(email, password)
-      if (remember) localStorage.setItem(SAVED_KEY, JSON.stringify({ email, password }))
-      else localStorage.removeItem(SAVED_KEY)
-      navigate('/', { replace: true })
+      await login(email, password, remember)
+      navigate('/dashboard')
     } catch (err) {
-      setError('E-mail ou senha incorretos')
-    } finally { setLoading(false) }
+      setError('E-mail ou senha inválidos.')
+      pushToast({ message: 'Falha no login.', type: 'error' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[#0D0D0D] p-6 md:p-10 overflow-y-auto">
-      <div className="w-full max-w-5xl flex flex-col md:flex-row items-center gap-10 md:gap-16">
-
-        {/* Left — visual card */}
+    <div className="flex flex-col md:flex-row min-h-screen bg-bg">
+      {/* Lado esquerdo */}
+      <div
+        className="relative w-full md:w-[60%] h-56 md:h-screen flex items-end p-8 overflow-hidden"
+        style={
+          loginBg
+            ? { backgroundImage: `url(${loginBg})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+            : { background: 'linear-gradient(135deg, #0F0F0F, #1a2a0f)' }
+        }
+      >
+        {!loginBg && <AnimatedGradientBlobs />}
+        <div className="absolute inset-0 bg-black/40" />
         <motion.div
-          className="relative w-full md:w-[340px] h-[240px] md:h-[520px] rounded-[28px] overflow-hidden flex-shrink-0 border border-white/10"
-          initial={{ opacity: 0, x: -24, scale: 0.97 }}
-          animate={{ opacity: 1, x: 0, scale: 1 }}
-          transition={{ type: 'spring', stiffness: 220, damping: 22 }}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
+          className="relative z-10"
         >
-          {loginImage ? (
-            <img src={loginImage} alt="Panda Reports" className="absolute inset-0 w-full h-full object-cover" />
-          ) : (
-            <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 30% 20%, #1a2a1a 0%, #0D0D0D 70%)' }}>
-              <motion.div
-                className="absolute top-1/4 left-1/4 w-40 h-40 rounded-full opacity-20"
-                style={{ background: 'radial-gradient(circle, #6BAF45, transparent)' }}
-                animate={{ scale: [1, 1.25, 1], x: [0, 20, 0], y: [0, -20, 0] }}
-                transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-              />
-              <motion.div
-                className="absolute bottom-1/4 right-1/4 w-32 h-32 rounded-full opacity-15"
-                style={{ background: 'radial-gradient(circle, #7DC952, transparent)' }}
-                animate={{ scale: [1.2, 1, 1.2], x: [0, -15, 0], y: [0, 15, 0] }}
-                transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
-              />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <motion.div
-                  className="w-20 h-20 rounded-3xl bg-green flex items-center justify-center text-4xl shadow-lg shadow-green/20"
-                  whileHover={{ rotate: [0, -5, 5, 0], scale: 1.05 }}
-                  transition={{ duration: 0.5 }}
+          <h1 className="text-white text-2xl md:text-3xl font-bold">Panda Agency</h1>
+          <p className="text-white/70 text-sm mt-1">Relatórios e gestão de entregas, em um só lugar.</p>
+        </motion.div>
+      </div>
+
+      {/* Lado direito */}
+      <div className="w-full md:w-[40%] flex flex-col items-center justify-center p-8">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="w-full max-w-sm flex flex-col gap-6"
+        >
+          <div className="flex flex-col items-center gap-3 mb-2">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="w-14 h-14 object-contain" />
+            ) : (
+              <span className="text-4xl">🐼</span>
+            )}
+            <h2 className="text-xl font-semibold text-text">Bem-vindo de volta</h2>
+          </div>
+
+          {savedSessions.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {savedSessions.map((s) => (
+                <button
+                  key={s.email}
+                  type="button"
+                  onClick={() => setEmail(s.email)}
+                  className="card flex items-center gap-3 px-4 py-3 text-left"
                 >
-                  🐼
-                </motion.div>
-              </div>
+                  <div className="w-8 h-8 rounded-full bg-green-dim text-green flex items-center justify-center flex-shrink-0">
+                    <User size={15} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-text truncate">{s.email}</p>
+                    <p className="text-xs text-text3">Clique para entrar</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeSavedSession(s.email)
+                    }}
+                    className="text-text3 hover:text-red text-xs"
+                  >
+                    remover
+                  </button>
+                </button>
+              ))}
             </div>
           )}
 
-          {/* Badge top-left */}
-          <div className="absolute top-4 left-4 flex items-center gap-1.5 bg-black/40 backdrop-blur-md px-2.5 py-1.5 rounded-lg border border-white/10">
-            <span className="text-sm leading-none">🐼</span>
-            <span className="text-[11px] font-semibold text-white tracking-wide">Panda</span>
-          </div>
-
-          {/* Caption bottom */}
-          <div className="absolute bottom-0 inset-x-0 p-4 pt-10" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.75), transparent)' }}>
-            <p className="text-[11px] text-white/70 font-medium">Panda Reports</p>
-            <p className="text-[10px] text-white/40">Plataforma de relatórios premium</p>
-          </div>
-        </motion.div>
-
-        {/* Right — form */}
-        <motion.div
-          className="flex-1 w-full max-w-sm mx-auto md:mx-0"
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, type: 'spring', stiffness: 220, damping: 24 }}
-        >
-          <div className="flex items-center gap-1.5 mb-3 text-green text-[11px] font-semibold uppercase tracking-wide">
-            <Sparkles size={12} /> Acesso à plataforma
-          </div>
-          <h1 className="text-2xl md:text-[28px] font-bold leading-tight text-white mb-1">
-            Bem-vindo de volta<br />à Panda Reports
-          </h1>
-          <p className="text-text-3 text-sm mb-7">Entre com sua conta para continuar</p>
-
-          {/* Saved session */}
-          {savedCreds && (
-            <motion.button
-              className="w-full mb-4 p-3 rounded-xl bg-green/10 border border-green/25 text-left hover:border-green/40 transition-colors"
-              onClick={() => handleLogin()}
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-            >
-              <div className="text-[10px] text-green font-bold uppercase tracking-wide mb-0.5">✓ Sessão salva</div>
-              <div className="text-sm font-medium">{savedCreds.email}</div>
-              <div className="text-xs text-text-3">Clique para entrar automaticamente</div>
-            </motion.button>
-          )}
-
-          {/* Error */}
-          {error && (
-            <motion.div
-              className="mb-3 p-2.5 rounded-lg bg-red-500/10 border border-red-500/25 text-red-400 text-xs"
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-            >
-              {error}
-            </motion.div>
-          )}
-
-          <form onSubmit={handleLogin}>
-            <Field label="E-mail">
-              <div className="relative">
-                <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-3" />
-                <input className="input pl-9" type="email" placeholder="seu@email.com" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
-              </div>
-            </Field>
-            <Field label="Senha">
-              <div className="relative">
-                <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-3" />
-                <input className="input pl-9 pr-9" type={showPass ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
-                <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-3 hover:text-text transition-colors">
-                  {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-              </div>
-            </Field>
-
-            <label className="flex items-center gap-2 mb-5 cursor-pointer">
-              <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} className="w-3.5 h-3.5 accent-green" />
-              <span className="text-xs text-text-2">Lembrar minha senha</span>
-            </label>
-
-            <motion.button
-              type="submit"
-              className="btn btn-green w-full justify-center py-2.5 text-sm font-bold"
-              disabled={loading}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              {loading ? <><span className="spinner border-black/20 border-t-black" /> Entrando…</> : <>Entrar na plataforma <ArrowRight size={15} /></>}
-            </motion.button>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <Field
+              label="E-mail"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="voce@pandaagency.com"
+              required
+            />
+            <Field
+              label="Senha"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+            />
+            <div className="flex items-center justify-between">
+              <Checkbox checked={remember} onChange={setRemember} label="Lembrar acesso" />
+            </div>
+            {error && <p className="text-xs text-red">{error}</p>}
+            <Button type="submit" icon={LogIn} loading={loading} className="w-full mt-1">
+              Entrar
+            </Button>
           </form>
-
-          <p className="text-center text-[11px] text-text-3 mt-5">Panda Agency · Plataforma interna</p>
         </motion.div>
       </div>
+    </div>
+  )
+}
+
+function AnimatedGradientBlobs() {
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      <motion.div
+        animate={{ x: [0, 60, 0], y: [0, 40, 0] }}
+        transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute w-96 h-96 rounded-full bg-green/10 blur-3xl -top-20 -left-20"
+      />
+      <motion.div
+        animate={{ x: [0, -50, 0], y: [0, -30, 0] }}
+        transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute w-80 h-80 rounded-full bg-green2/10 blur-3xl bottom-0 right-0"
+      />
     </div>
   )
 }

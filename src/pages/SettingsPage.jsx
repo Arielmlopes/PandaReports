@@ -1,222 +1,314 @@
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { supabase } from '@/lib/supabase'
-import { useApp } from '@/contexts/AppContext'
-import { useAuth } from '@/contexts/AuthContext'
-import { Button, Field, Toggle, Modal, ColorPicker } from '@/components/ui'
-import { PALETTE } from '@/utils'
+import { useEffect, useState } from 'react'
+import { Image as ImageIcon, UserPlus, Building2, Users, Trash2 } from 'lucide-react'
+import { supabase, publicUrlFor, uploadFile } from '../lib/supabase'
+import { useApp } from '../contexts/AppContext'
+import { Button, Field, Select, Spinner } from '../components/ui'
+
+const ROLES = ['admin', 'member', 'freelancer', 'client']
+const CLIENT_COLORS = ['#5DD62C', '#3B82F6', '#EAB308', '#6366F1', '#EF4444', '#EC4899', '#14B8A6']
+
+function Section({ icon: Icon, title, children }) {
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Icon size={16} className="text-green" />
+        <h3 className="font-medium text-text">{title}</h3>
+      </div>
+      {children}
+    </div>
+  )
+}
 
 export default function SettingsPage() {
-  const { clients, collaborators, dispatch, showToast } = useApp()
-  const { user, logout } = useAuth()
-  const [userRoles, setUserRoles] = useState([])
-  const [newUser, setNewUser] = useState({ email: '', password: '', role: 'member' })
-  const [newClient, setNewClient] = useState({ name: '', seg: '', resp: '', color: PALETTE[0] })
-  const [newCollab, setNewCollab] = useState({ name: '', role: '' })
-  const [addingUser, setAddingUser] = useState(false)
+  const { settings, loadSettings, clients, loadClients, collaborators, loadCollaborators, pushToast } = useApp()
+  const [users, setUsers] = useState([])
+  const [loadingUsers, setLoadingUsers] = useState(true)
+
+  const loadUsers = async () => {
+    setLoadingUsers(true)
+    const { data } = await supabase.from('user_roles').select('*').order('created_at', { ascending: false })
+    setUsers(data || [])
+    setLoadingUsers(false)
+  }
 
   useEffect(() => {
-    supabase.from('user_roles').select('*').order('created_at').then(({ data }) => setUserRoles(data || []))
+    loadUsers()
   }, [])
 
-  const createUser = async () => {
-    if (!newUser.email || !newUser.password) { showToast('Preencha e-mail e senha', 'error'); return }
-    setAddingUser(true)
-    try {
-      await supabase.auth.signUp({ email: newUser.email, password: newUser.password })
-      const { data } = await supabase.from('user_roles').upsert({ email: newUser.email, role: newUser.role }, { onConflict: 'email' }).select().single()
-      if (data) setUserRoles(prev => [...prev.filter(r => r.email !== data.email), data])
-      setNewUser({ email: '', password: '', role: 'member' })
-      showToast('Usuário criado!')
-    } catch (e) { showToast('Erro ao criar usuário', 'error') }
-    setAddingUser(false)
+  async function handleUploadSetting(key, file) {
+    if (!file) return
+    const url = await uploadFile(file, 'settings')
+    await supabase.from('settings').upsert({ key, logo_url: url }, { onConflict: 'key' })
+    await loadSettings()
+    pushToast({ message: 'Imagem atualizada.', type: 'success' })
   }
-
-  const createClient = async () => {
-    if (!newClient.name) { showToast('Informe o nome', 'error'); return }
-    const { data, error } = await supabase.from('clients').insert(newClient).select().single()
-    if (error) { showToast('Erro ao criar', 'error'); return }
-    dispatch({ type: 'ADD_CLIENT', payload: data })
-    setNewClient({ name: '', seg: '', resp: '', color: PALETTE[0] })
-    showToast('Cliente criado!')
-  }
-
-  const createCollab = async () => {
-    if (!newCollab.name) { showToast('Informe o nome', 'error'); return }
-    const { data, error } = await supabase.from('collaborators').insert(newCollab).select().single()
-    if (error) { showToast('Erro ao criar', 'error'); return }
-    dispatch({ type: 'ADD_COLLABORATOR', payload: data })
-    setNewCollab({ name: '', role: '' })
-    showToast('Colaborador adicionado!')
-  }
-
-  const [logoUrl, setLogoUrl] = useState(() => localStorage.getItem('sys_logo') || '')
-  const [logoUploading, setLogoUploading] = useState(false)
-
-  const uploadLogo = async (e) => {
-    const file = e.target.files[0]; if (!file) return
-    setLogoUploading(true)
-    const path = `logos/system_logo_${Date.now()}.jpg`
-    const { error } = await supabase.storage.from('uploads').upload(path, file, { upsert: true })
-    if (!error) {
-      const { data } = supabase.storage.from('uploads').getPublicUrl(path)
-      await supabase.from('settings').upsert({ key: 'system_logo', logo_url: data.publicUrl }, { onConflict: 'key' })
-      setLogoUrl(data.publicUrl)
-      localStorage.setItem('sys_logo', data.publicUrl)
-      showToast('Logo atualizada! Recarregue a página.')
-    } else showToast('Erro ao enviar logo', 'error')
-    setLogoUploading(false)
-  }
-
-  const removeLogo = async () => {
-    await supabase.from('settings').delete().eq('key', 'system_logo')
-    setLogoUrl(''); localStorage.removeItem('sys_logo')
-    showToast('Logo removida')
-  }
-
-  const [loginImageUrl, setLoginImageUrl] = useState(() => localStorage.getItem('sys_login_image') || '')
-  const [loginImageUploading, setLoginImageUploading] = useState(false)
-
-  const uploadLoginImage = async (e) => {
-    const file = e.target.files[0]; if (!file) return
-    setLoginImageUploading(true)
-    const path = `login/login_image_${Date.now()}.jpg`
-    const { error } = await supabase.storage.from('uploads').upload(path, file, { upsert: true })
-    if (!error) {
-      const { data } = supabase.storage.from('uploads').getPublicUrl(path)
-      await supabase.from('settings').upsert({ key: 'login_image', logo_url: data.publicUrl }, { onConflict: 'key' })
-      setLoginImageUrl(data.publicUrl)
-      localStorage.setItem('sys_login_image', data.publicUrl)
-      showToast('Imagem da tela de login atualizada!')
-    } else showToast('Erro ao enviar imagem', 'error')
-    setLoginImageUploading(false)
-  }
-
-  const removeLoginImage = async () => {
-    await supabase.from('settings').delete().eq('key', 'login_image')
-    setLoginImageUrl(''); localStorage.removeItem('sys_login_image')
-    showToast('Imagem removida — voltou ao padrão')
-  }
-
-  const Section = ({ title, children }) => (
-    <motion.div className="card p-5 mb-4" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-      <h3 className="text-sm font-semibold mb-4">{title}</h3>
-      {children}
-    </motion.div>
-  )
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: 24 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24 }}>⚙️ Configurações</h1>
+    <div className="p-4 md:p-6 max-w-4xl mx-auto flex flex-col gap-6">
+      <h1 className="text-xl font-semibold text-text">Configurações</h1>
 
-      {/* Logo do sistema */}
-      <Section title="🖼 Logo do sistema">
-        <p style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>Aparece na sidebar. Substitui o nome "Panda Reports" quando definida.</p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          {logoUrl
-            ? <img src={logoUrl} alt="Logo atual" style={{ height: 48, maxWidth: 160, objectFit: 'contain', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)' }}/>
-            : <div style={{ width: 48, height: 48, borderRadius: 8, background: '#6BAF45', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🐼</div>}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, background: 'rgba(107,175,69,0.1)', border: '1px solid rgba(107,175,69,0.3)', color: '#6BAF45', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-              <input type="file" accept="image/*" className="hidden" onChange={uploadLogo}/>
-              {logoUploading ? '⏳ Enviando...' : '📤 Enviar logo'}
-            </label>
-            {logoUrl && <button onClick={removeLogo} style={{ padding: '8px 14px', borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Remover</button>}
-          </div>
-        </div>
+      <div className="grid md:grid-cols-3 gap-6">
+        <Section icon={ImageIcon} title="Logo do sistema">
+          <ImageUploadField
+            currentUrl={publicUrlFor(settings.system_logo?.logo_url)}
+            onUpload={(file) => handleUploadSetting('system_logo', file)}
+          />
+        </Section>
+
+        <Section icon={ImageIcon} title="Imagem do Login">
+          <ImageUploadField
+            currentUrl={publicUrlFor(settings.login_bg_image?.logo_url)}
+            onUpload={(file) => handleUploadSetting('login_bg_image', file)}
+          />
+        </Section>
+
+        <Section icon={ImageIcon} title="Favicon">
+          <ImageUploadField
+            currentUrl={publicUrlFor(settings.favicon?.logo_url)}
+            onUpload={(file) => handleUploadSetting('favicon', file)}
+          />
+        </Section>
+      </div>
+
+      <Section icon={UserPlus} title="Novo usuário">
+        <NewUserForm onCreated={loadUsers} />
       </Section>
 
-      {/* Imagem da tela de login */}
-      <Section title="🖼 Imagem da tela de login">
-        <p style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>Aparece no card do lado esquerdo da tela de login. Se não definida, usa o visual padrão com o panda.</p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          {loginImageUrl
-            ? <img src={loginImageUrl} alt="Imagem de login atual" style={{ width: 90, height: 130, objectFit: 'cover', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)' }}/>
-            : <div style={{ width: 90, height: 130, borderRadius: 10, background: '#141414', border: '1px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🐼</div>}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, background: 'rgba(107,175,69,0.1)', border: '1px solid rgba(107,175,69,0.3)', color: '#6BAF45', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-              <input type="file" accept="image/*" className="hidden" onChange={uploadLoginImage}/>
-              {loginImageUploading ? '⏳ Enviando...' : '📤 Enviar imagem'}
-            </label>
-            {loginImageUrl && <button onClick={removeLoginImage} style={{ padding: '8px 14px', borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Remover</button>}
-          </div>
-        </div>
-      </Section>
-
-      <Section title="Novo usuário">
-        <Field label="E-mail"><input className="input" type="email" value={newUser.email} onChange={e => setNewUser(p => ({...p, email: e.target.value}))} placeholder="email@exemplo.com" /></Field>
-        <Field label="Senha inicial"><input className="input" type="password" value={newUser.password} onChange={e => setNewUser(p => ({...p, password: e.target.value}))} placeholder="mínimo 6 caracteres" /></Field>
-        <Field label="Função">
-          <select className="input" value={newUser.role} onChange={e => setNewUser(p => ({...p, role: e.target.value}))}>
-            <option value="admin">Admin — acesso total</option>
-            <option value="member">Membro — só Fluxo</option>
-            <option value="freelancer">Freelancer — cards atribuídos</option>
-            <option value="client">Cliente — portal próprio</option>
-          </select>
-        </Field>
-        <Button variant="green" loading={addingUser} onClick={createUser}>Criar usuário</Button>
-
-        {userRoles.length > 0 && (
-          <div className="mt-4 space-y-2">
-            {userRoles.map(r => (
-              <div key={r.id} className="flex items-center gap-3 bg-bg-3 rounded-lg px-3 py-2">
-                <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-[10px] font-bold text-white">{r.email[0].toUpperCase()}</div>
-                <span className="flex-1 text-xs truncate">{r.email}</span>
-                <select className="text-xs bg-bg-4 border border-border rounded px-1.5 py-1 text-text-3" value={r.role} onChange={async e => {
-                  await supabase.from('user_roles').update({ role: e.target.value }).eq('id', r.id)
-                  setUserRoles(prev => prev.map(u => u.id === r.id ? {...u, role: e.target.value} : u))
-                  showToast('Função atualizada')
-                }}>
-                  <option value="admin">Admin</option>
-                  <option value="member">Membro</option>
-                  <option value="freelancer">Freelancer</option>
-                  <option value="client">Cliente</option>
-                </select>
-              </div>
+      <Section icon={Users} title="Usuários">
+        {loadingUsers ? (
+          <Spinner />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {users.map((u) => (
+              <UserRow key={u.id} user={u} onChanged={loadUsers} />
             ))}
           </div>
         )}
       </Section>
 
-      <Section title="Novo cliente">
-        <Field label="Nome *"><input className="input" value={newClient.name} onChange={e => setNewClient(p => ({...p, name: e.target.value}))} placeholder="Nome do cliente" /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Segmento"><input className="input" value={newClient.seg} onChange={e => setNewClient(p => ({...p, seg: e.target.value}))} placeholder="Ex: Saúde" /></Field>
-          <Field label="Responsável"><input className="input" value={newClient.resp} onChange={e => setNewClient(p => ({...p, resp: e.target.value}))} placeholder="Ex: Ana Lima" /></Field>
-        </div>
-        <Field label="Cor"><ColorPicker value={newClient.color} onChange={c => setNewClient(p => ({...p, color: c}))} /></Field>
-        <Button variant="green" className="mt-3" onClick={createClient}>Criar cliente</Button>
+      <Section icon={Building2} title="Novo cliente">
+        <NewClientForm onCreated={loadClients} />
       </Section>
 
-      <Section title="Novo colaborador">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Nome *"><input className="input" value={newCollab.name} onChange={e => setNewCollab(p => ({...p, name: e.target.value}))} placeholder="Nome" /></Field>
-          <Field label="Função"><input className="input" value={newCollab.role} onChange={e => setNewCollab(p => ({...p, role: e.target.value}))} placeholder="Ex: Designer" /></Field>
-        </div>
-        <Button variant="indigo" onClick={createCollab}>Adicionar colaborador</Button>
-        <div className="mt-3 space-y-1.5">
-          {collaborators.map(c => (
-            <div key={c.id} className="flex items-center gap-2 bg-bg-3 rounded-lg px-3 py-2">
-              <div className="w-5 h-5 rounded-full bg-indigo-500/80 flex items-center justify-center text-[9px] font-bold text-white">{c.name[0]}</div>
-              <span className="flex-1 text-xs">{c.name}</span>
-              {c.role && <span className="text-[10px] text-text-3">{c.role}</span>}
-              <button className="text-text-3 hover:text-red-400 transition-colors text-xs" onClick={() => {
-                supabase.from('collaborators').delete().eq('id', c.id).then(() => { dispatch({ type: 'DELETE_COLLABORATOR', payload: c.id }); showToast('Removido') })
-              }}>✕</button>
+      <Section icon={Building2} title="Clientes">
+        <div className="flex flex-col gap-2">
+          {clients.map((c) => (
+            <div key={c.id} className="flex items-center gap-3 px-3 py-2 bg-bg4 rounded-input">
+              <span className="w-3 h-3 rounded-full" style={{ background: c.color || 'var(--green)' }} />
+              <span className="text-sm text-text flex-1">{c.name}</span>
+              <span className="text-xs text-text3">{c.seg}</span>
             </div>
           ))}
         </div>
       </Section>
 
-      <div className="card p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium">{user?.email}</p>
-            <p className="text-xs text-text-3">Conectado</p>
-          </div>
-          <Button variant="red" size="sm" onClick={logout}>Sair</Button>
+      <Section icon={Users} title="Novo colaborador">
+        <NewCollaboratorForm onCreated={loadCollaborators} />
+      </Section>
+
+      <Section icon={Users} title="Colaboradores">
+        <div className="flex flex-col gap-2">
+          {collaborators.map((c) => (
+            <div key={c.id} className="flex items-center gap-3 px-3 py-2 bg-bg4 rounded-input">
+              <span className="text-sm text-text flex-1">{c.name}</span>
+              {c.email && <span className="text-xs text-text3">{c.email}</span>}
+              <span className="text-xs text-text3">{c.role}</span>
+              <button
+                onClick={async () => {
+                  await supabase.from('collaborators').delete().eq('id', c.id)
+                  loadCollaborators()
+                }}
+                className="text-text3 hover:text-red"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
         </div>
-      </div>
+      </Section>
     </div>
+  )
+}
+
+function ImageUploadField({ currentUrl, onUpload }) {
+  const [uploading, setUploading] = useState(false)
+  return (
+    <div className="flex items-center gap-4">
+      <div className="w-20 h-20 rounded-input bg-bg4 flex items-center justify-center overflow-hidden flex-shrink-0">
+        {currentUrl ? (
+          <img src={currentUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
+        ) : (
+          <ImageIcon size={22} className="text-text3" />
+        )}
+      </div>
+      <label className="inline-flex items-center gap-2 rounded-input font-medium text-sm px-4 py-2.5 bg-bg4 text-text hover:bg-bg5 border border-border2 cursor-pointer transition-colors duration-150">
+        {uploading ? <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" /> : 'Enviar imagem'}
+        <input
+          type="file"
+          accept="image/*"
+          hidden
+          disabled={uploading}
+          onChange={async (e) => {
+            const file = e.target.files?.[0]
+            if (!file) return
+            setUploading(true)
+            try {
+              await onUpload(file)
+            } finally {
+              setUploading(false)
+            }
+          }}
+        />
+      </label>
+    </div>
+  )
+}
+
+function NewUserForm({ onCreated }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [role, setRole] = useState('member')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const { error: signUpError } = await supabase.auth.signUp({ email, password })
+      if (signUpError) throw signUpError
+      const { error } = await supabase.from('user_roles').insert({ email, role })
+      if (error) throw error
+      setEmail('')
+      setPassword('')
+      onCreated()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="grid md:grid-cols-4 gap-3 items-end">
+      <Field label="E-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+      <Field label="Senha" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+      <Select label="Role" value={role} onChange={(e) => setRole(e.target.value)}>
+        {ROLES.map((r) => (
+          <option key={r} value={r}>
+            {r}
+          </option>
+        ))}
+      </Select>
+      <Button type="submit" loading={saving}>
+        Criar usuário
+      </Button>
+    </form>
+  )
+}
+
+function UserRow({ user, onChanged }) {
+  async function updateRole(role) {
+    await supabase.from('user_roles').update({ role }).eq('id', user.id)
+    onChanged()
+  }
+  return (
+    <div className="flex items-center gap-3 px-3 py-2 bg-bg4 rounded-input">
+      <span className="text-sm text-text flex-1 truncate">{user.email}</span>
+      <select
+        value={user.role}
+        onChange={(e) => updateRole(e.target.value)}
+        className="input-base text-xs px-2 py-1"
+      >
+        {ROLES.map((r) => (
+          <option key={r} value={r}>
+            {r}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+function NewClientForm({ onCreated }) {
+  const [name, setName] = useState('')
+  const [seg, setSeg] = useState('')
+  const [resp, setResp] = useState('')
+  const [color, setColor] = useState(CLIENT_COLORS[0])
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const { error } = await supabase.from('clients').insert({ name, seg, resp, color })
+      if (error) throw error
+      setName('')
+      setSeg('')
+      setResp('')
+      onCreated()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <div className="grid md:grid-cols-3 gap-3">
+        <Field label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
+        <Field label="Segmento" value={seg} onChange={(e) => setSeg(e.target.value)} />
+        <Field label="Responsável" value={resp} onChange={(e) => setResp(e.target.value)} />
+      </div>
+      <div className="flex items-center gap-2">
+        {CLIENT_COLORS.map((c) => (
+          <button
+            type="button"
+            key={c}
+            onClick={() => setColor(c)}
+            className="w-6 h-6 rounded-full border-2"
+            style={{ background: c, borderColor: color === c ? '#fff' : 'transparent' }}
+          />
+        ))}
+        <Button type="submit" loading={saving} className="ml-auto">
+          Criar cliente
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+function NewCollaboratorForm({ onCreated }) {
+  const [name, setName] = useState('')
+  const [role, setRole] = useState('')
+  const [email, setEmail] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const { error } = await supabase.from('collaborators').insert({ name, role, email: email || null })
+      if (error) throw error
+      setName('')
+      setRole('')
+      setEmail('')
+      onCreated()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="grid md:grid-cols-4 gap-3 items-end">
+      <Field label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
+      <Field label="Função" value={role} onChange={(e) => setRole(e.target.value)} />
+      <Field
+        label="E-mail (para notificações)"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        hint="Só recebe @menções se tiver login"
+      />
+      <Button type="submit" loading={saving}>
+        Adicionar
+      </Button>
+    </form>
   )
 }

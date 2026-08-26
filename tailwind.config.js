@@ -1,15 +1,44 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        bg: { DEFAULT: '#0D0D0D', 2: '#141414', 3: '#1A1A1A', 4: '#222' },
-        green: { DEFAULT: '#6BAF45', 2: '#7DC952', dim: 'rgba(107,175,69,0.12)' },
-        border: { DEFAULT: 'rgba(255,255,255,0.06)', 2: 'rgba(255,255,255,0.11)' },
-        text: { DEFAULT: '#E8E8E8', 2: '#888', 3: '#555' }
+        bg: 'var(--bg)',
+        bg2: 'var(--bg2)',
+        bg3: 'var(--bg3)',
+        bg4: 'var(--bg4)',
+        bg5: 'var(--bg5)',
+        green: {
+          DEFAULT: 'var(--green)',
+          2: 'var(--green2)',
+          dark: 'var(--green-dark)',
+          dim: 'var(--green-dim)',
+          glow: 'var(--green-glow)'
+        },
+        text: {
+          DEFAULT: 'var(--text)',
+          2: 'var(--text2)',
+          3: 'var(--text3)'
+        },
+        border: {
+          DEFAULT: 'var(--border)',
+          2: 'var(--border2)'
+        },
+        red: 'var(--red)',
+        yellow: 'var(--yellow)',
+        blue: 'var(--blue)',
+        indigo: 'var(--indigo)'
       },
-      fontFamily: { sans: ['DM Sans', 'sans-serif'] }
+      fontFamily: {
+        sans: ['"DM Sans"', 'sans-serif']
+      },
+      borderRadius: {
+        card: '10px',
+        modal: '12px',
+        input: '8px'
+      }
     }
   },
   plugins: []
