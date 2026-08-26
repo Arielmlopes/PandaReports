@@ -1,0 +1,11 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# SPA: qualquer rota (ex: /dashboard, /kanban, /clients/xyz) precisa cair no
+# index.html para o React Router assumir o roteamento no navegador. Sem isso,
+# recarregar a pagina em qualquer rota que nao seja "/" retorna 404 da Netlify.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
