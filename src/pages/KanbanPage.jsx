@@ -56,6 +56,7 @@ export default function KanbanPage() {
   const [newCardColumn, setNewCardColumn] = useState(null)
   const [dragCardId, setDragCardId] = useState(null)
   const [dragOver, setDragOver] = useState(null) // { columnId, cardId, side }
+  const [newColumnOpen, setNewColumnOpen] = useState(false)
   const boardRef = useRef(null)
   const panState = useRef({ active: false, startX: 0, startScroll: 0 })
 
@@ -96,14 +97,29 @@ export default function KanbanPage() {
   }
 
   async function persistPositions(columnId, orderedCards) {
-    const updates = orderedCards.map((c, i) => ({ id: c.id, position: i, column_id: columnId }))
+    // So manda pro banco os cards cuja posicao/coluna realmente mudou. Sem isso,
+    // soltar um card numa coluna com centenas de cards (ex: "Finalizado") disparava
+    // uma atualizacao sequencial pra TODOS eles — lento o bastante pra parecer
+    // travado/com erro, mesmo quando so 1 card de fato mudou de lugar.
+    const updates = orderedCards
+      .map((c, i) => ({ id: c.id, position: i, column_id: columnId, changed: c.position !== i || c.column_id !== columnId }))
+      .filter((u) => u.changed)
+
     setCards((prev) => {
       const others = prev.filter((c) => !orderedCards.find((o) => o.id === c.id))
       const updated = orderedCards.map((c, i) => ({ ...c, position: i, column_id: columnId }))
       return [...others, ...updated]
     })
-    for (const u of updates) {
-      await supabase.from('kanban_cards').update({ position: u.position, column_id: u.column_id }).eq('id', u.id)
+
+    try {
+      const results = await Promise.all(
+        updates.map((u) => supabase.from('kanban_cards').update({ position: u.position, column_id: u.column_id }).eq('id', u.id))
+      )
+      if (results.some((r) => r.error)) {
+        pushToast({ message: 'Não foi possível salvar a posição do card. Tente novamente.', type: 'error' })
+      }
+    } catch {
+      pushToast({ message: 'Não foi possível salvar a posição do card. Tente novamente.', type: 'error' })
     }
   }
 
@@ -150,6 +166,18 @@ export default function KanbanPage() {
 
   async function notify(userEmail, payload) {
     await supabase.from('notifications').insert({ user_email: userEmail, read: false, ...payload })
+  }
+
+  async function createColumn(label, color) {
+    try {
+      const position = columns.length ? Math.max(...columns.map((c) => c.position ?? 0)) + 1 : 0
+      const { data, error } = await supabase.from('kanban_columns').insert({ label, color, position }).select().single()
+      if (error) throw error
+      setColumns((cols) => [...cols, data])
+      setNewColumnOpen(false)
+    } catch {
+      pushToast({ message: 'Não foi possível criar a coluna.', type: 'error' })
+    }
   }
 
   function startPan(e) {
@@ -266,7 +294,17 @@ export default function KanbanPage() {
             </div>
           )
         })}
+
+        <button
+          onClick={() => setNewColumnOpen(true)}
+          className="flex-shrink-0 w-[160px] h-full rounded-card border border-dashed border-border2 text-text3 hover:text-green hover:border-green/40 flex flex-col items-center justify-center gap-2 transition-colors"
+        >
+          <Plus size={20} />
+          <span className="text-sm">Nova coluna</span>
+        </button>
       </div>
+
+      {newColumnOpen && <NewColumnModal onClose={() => setNewColumnOpen(false)} onCreate={createColumn} />}
 
       {newCardColumn && (
         <NewCardModal
@@ -285,6 +323,7 @@ export default function KanbanPage() {
 
       {activeCard && (
         <CardDetailModal
+          key={activeCard.id}
           card={cards.find((c) => c.id === activeCard.id) || activeCard}
           columns={columns}
           clients={clients}
@@ -403,6 +442,54 @@ function NewCardModal({ defaultColumnId, columns, clients, collaborators, countI
             </option>
           ))}
         </Select>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button type="submit" loading={saving}>
+            Criar
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+const COLUMN_COLORS = ['#5DD62C', '#3B82F6', '#EAB308', '#6366F1', '#EF4444', '#EC4899', '#14B8A6', '#A1A1AA']
+
+function NewColumnModal({ onClose, onCreate }) {
+  const [label, setLabel] = useState('')
+  const [color, setColor] = useState(COLUMN_COLORS[0])
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await onCreate(label, color)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Nova coluna">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <Field label="Nome da coluna" value={label} onChange={(e) => setLabel(e.target.value)} required autoFocus />
+        <div className="flex flex-col gap-1.5">
+          <span className="text-sm text-text2 font-medium">Cor</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {COLUMN_COLORS.map((c) => (
+              <button
+                type="button"
+                key={c}
+                onClick={() => setColor(c)}
+                className="w-7 h-7 rounded-full border-2"
+                style={{ background: c, borderColor: color === c ? '#fff' : 'transparent' }}
+              />
+            ))}
+          </div>
+        </div>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancelar
@@ -538,7 +625,12 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
     }
   }
 
-  async function handleFinalize({ type, description: finalDesc, files }) {
+  async function handleDeleteAttachment(index) {
+    const attachments = (card.attachments || []).filter((_, i) => i !== index)
+    await saveField({ attachments })
+  }
+
+  async function handleFinalize({ type, description: finalDesc, files, reuseAttachment }) {
     const { data: material, error } = await supabase
       .from('materials')
       .insert({
@@ -552,9 +644,16 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
       .single()
     if (error) return
 
-    for (const file of files) {
-      const url = await uploadFile(file, `materials/${material.id}`)
-      await supabase.from('files').insert({ material_id: material.id, url, name: file.name, file_type: fileCategory(file.type) })
+    if (files.length > 0) {
+      for (const file of files) {
+        const url = await uploadFile(file, `materials/${material.id}`)
+        await supabase.from('files').insert({ material_id: material.id, url, name: file.name, file_type: fileCategory(file.type) })
+      }
+    } else if (reuseAttachment) {
+      // sem upload novo: reaproveita o ultimo anexo ja presente no card (ja esta no storage)
+      await supabase
+        .from('files')
+        .insert({ material_id: material.id, url: reuseAttachment.url, name: reuseAttachment.name, file_type: reuseAttachment.ft })
     }
 
     await saveField({ finalized_material_id: material.id })
@@ -636,17 +735,28 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
             </div>
             <div className="grid grid-cols-4 gap-2">
               {(card.attachments || []).map((a, i) => (
-                <button
-                  key={i}
-                  onClick={() => setViewerIndex(i)}
-                  className="aspect-square rounded-input overflow-hidden bg-bg4 flex items-center justify-center"
-                >
-                  {a.ft === 'image' ? (
-                    <img src={a.url} alt="" loading="lazy" className="w-full h-full object-cover" />
-                  ) : (
-                    <FileText size={20} className="text-text3" />
-                  )}
-                </button>
+                <div key={i} className="group relative aspect-square rounded-input overflow-hidden bg-bg4">
+                  <button
+                    onClick={() => setViewerIndex(i)}
+                    className="w-full h-full flex items-center justify-center"
+                  >
+                    {a.ft === 'image' ? (
+                      <img src={a.url} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    ) : (
+                      <FileText size={20} className="text-text3" />
+                    )}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteAttachment(i)
+                    }}
+                    className="absolute top-1 right-1 bg-black/70 rounded-full p-1 text-white/80 opacity-0 group-hover:opacity-100 hover:text-red transition-opacity"
+                    title="Remover anexo"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               ))}
               {(!card.attachments || card.attachments.length === 0) && (
                 <span className="text-xs text-text3 col-span-4">Nenhum anexo</span>
@@ -767,11 +877,22 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
           index={viewerIndex}
           onClose={() => setViewerIndex(null)}
           onNavigate={setViewerIndex}
+          onDelete={(i) => {
+            const remaining = (card.attachments || []).length - 1
+            handleDeleteAttachment(i)
+            if (remaining <= 0) setViewerIndex(null)
+            else setViewerIndex(Math.min(i, remaining - 1))
+          }}
         />
       )}
 
       {finalizeOpen && (
-        <FinalizeModal onClose={() => setFinalizeOpen(false)} onSubmit={handleFinalize} defaultDescription={card.title} />
+        <FinalizeModal
+          onClose={() => setFinalizeOpen(false)}
+          onSubmit={handleFinalize}
+          defaultDescription={card.title}
+          existingAttachments={card.attachments || []}
+        />
       )}
     </Modal>
   )
@@ -837,7 +958,7 @@ function CommentItem({ comment, canManage, onSave, onDelete }) {
   )
 }
 
-function AttachmentViewer({ attachments, index, onClose, onNavigate }) {
+function AttachmentViewer({ attachments, index, onClose, onNavigate, onDelete }) {
   const file = attachments[index]
 
   useEffect(() => {
@@ -860,6 +981,16 @@ function AttachmentViewer({ attachments, index, onClose, onNavigate }) {
           <button onClick={() => downloadBlob(file.url, file.name)} className="text-white/70 hover:text-white">
             <Download size={20} />
           </button>
+          {onDelete && (
+            <button
+              onClick={() => {
+                if (window.confirm('Remover este anexo?')) onDelete(index)
+              }}
+              className="text-white/70 hover:text-red"
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
           <button onClick={onClose} className="text-white/70 hover:text-white">
             <X size={22} />
           </button>
@@ -929,17 +1060,24 @@ function AttachmentViewer({ attachments, index, onClose, onNavigate }) {
   )
 }
 
-function FinalizeModal({ onClose, onSubmit, defaultDescription }) {
+function FinalizeModal({ onClose, onSubmit, defaultDescription, existingAttachments }) {
   const [type, setType] = useState('Post')
   const [description, setDescription] = useState(defaultDescription || '')
   const [files, setFiles] = useState([])
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const lastAttachment = existingAttachments?.[existingAttachments.length - 1] || null
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (files.length === 0 && !lastAttachment) {
+      setError('Anexe uma arte final ou adicione um anexo ao card antes de finalizar.')
+      return
+    }
+    setError('')
     setSaving(true)
     try {
-      await onSubmit({ type, description, files })
+      await onSubmit({ type, description, files, reuseAttachment: files.length === 0 ? lastAttachment : null })
     } finally {
       setSaving(false)
     }
@@ -958,8 +1096,24 @@ function FinalizeModal({ onClose, onSubmit, defaultDescription }) {
         <Field label="Descrição" value={description} onChange={(e) => setDescription(e.target.value)} />
         <label className="flex flex-col gap-1.5">
           <span className="text-sm text-text2 font-medium">Artes finais</span>
-          <input type="file" multiple required onChange={(e) => setFiles(Array.from(e.target.files))} className="text-sm text-text2" />
+          {lastAttachment && files.length === 0 && (
+            <div className="flex items-center gap-2 p-2 bg-bg4 rounded-input border border-border2">
+              {lastAttachment.ft === 'image' ? (
+                <img src={lastAttachment.url} alt="" className="w-10 h-10 object-cover rounded-input flex-shrink-0" />
+              ) : (
+                <FileText size={18} className="text-text3 flex-shrink-0" />
+              )}
+              <span className="text-xs text-text2 truncate">Vai usar o último anexo do card: {lastAttachment.name}</span>
+            </div>
+          )}
+          <input type="file" multiple onChange={(e) => setFiles(Array.from(e.target.files))} className="text-sm text-text2" />
+          <span className="text-xs text-text3">
+            {lastAttachment
+              ? 'Deixe em branco para usar o anexo acima, ou selecione arquivos novos para substituir.'
+              : 'Selecione ao menos um arquivo (o card ainda não tem anexos).'}
+          </span>
         </label>
+        {error && <p className="text-xs text-red">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancelar
