@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { createPortal } from 'react-dom'
 import {
   Plus,
   X,
@@ -96,37 +96,43 @@ export default function KanbanPage() {
     return visibleCounts[colId] || PAGE_SIZE
   }
 
-  async function persistPositions(columnId, orderedCards) {
-    // So manda pro banco os cards cuja posicao/coluna realmente mudou. Sem isso,
-    // soltar um card numa coluna com centenas de cards (ex: "Finalizado") disparava
-    // uma atualizacao sequencial pra TODOS eles — lento o bastante pra parecer
-    // travado/com erro, mesmo quando so 1 card de fato mudou de lugar.
-    const updates = orderedCards
-      .map((c, i) => ({ id: c.id, position: i, column_id: columnId, changed: c.position !== i || c.column_id !== columnId }))
-      .filter((u) => u.changed)
+  // Calcula quais cards precisam ser gravados no banco, comparando SEMPRE com o
+  // estado "de antes do drop" (snapshot em `cards`), e nao com a copia ja alterada.
+  // (Comparar com a copia alterada fazia o card arrastado parecer "inalterado"
+  // quando a posicao antiga coincidia com a nova, e ele nao era salvo — voltava
+  // pro lugar ao recarregar.)
+  function diffUpdates(columnId, orderedCards) {
+    const before = new Map(cards.map((c) => [c.id, c]))
+    return orderedCards
+      .map((c, i) => ({ id: c.id, position: i, column_id: columnId }))
+      .filter((u) => {
+        const old = before.get(u.id)
+        return !old || old.position !== u.position || old.column_id !== u.column_id
+      })
+  }
 
+  function applyOrderLocally(columnId, orderedCards) {
     setCards((prev) => {
-      const others = prev.filter((c) => !orderedCards.find((o) => o.id === c.id))
+      const ids = new Set(orderedCards.map((c) => c.id))
+      const others = prev.filter((c) => !ids.has(c.id))
       const updated = orderedCards.map((c, i) => ({ ...c, position: i, column_id: columnId }))
       return [...others, ...updated]
     })
+  }
 
-    try {
-      const results = await Promise.all(
-        updates.map((u) => supabase.from('kanban_cards').update({ position: u.position, column_id: u.column_id }).eq('id', u.id))
-      )
-      if (results.some((r) => r.error)) {
-        pushToast({ message: 'Não foi possível salvar a posição do card. Tente novamente.', type: 'error' })
-      }
-    } catch {
-      pushToast({ message: 'Não foi possível salvar a posição do card. Tente novamente.', type: 'error' })
-    }
+  function resetDrag() {
+    setDragCardId(null)
+    setDragOver(null)
   }
 
   async function handleDrop(targetColumnId, targetCardId) {
     if (!dragCardId) return
     const dragged = cards.find((c) => c.id === dragCardId)
-    if (!dragged) return
+    // soltar o card em cima dele mesmo: nao faz nada
+    if (!dragged || targetCardId === dragCardId) {
+      resetDrag()
+      return
+    }
 
     const originColumnId = dragged.column_id
     const targetList = cardsByColumn[targetColumnId]?.filter((c) => c.id !== dragCardId) || []
@@ -134,34 +140,49 @@ export default function KanbanPage() {
     let insertIndex = targetList.length
     if (targetCardId) {
       const idx = targetList.findIndex((c) => c.id === targetCardId)
-      insertIndex = dragOver?.side === 'below' ? idx + 1 : idx
+      if (idx >= 0) insertIndex = dragOver?.side === 'below' ? idx + 1 : idx
     }
 
     const newTargetList = [...targetList]
     newTargetList.splice(insertIndex, 0, { ...dragged, column_id: targetColumnId })
 
-    await persistPositions(targetColumnId, newTargetList)
+    const updates = diffUpdates(targetColumnId, newTargetList)
+    applyOrderLocally(targetColumnId, newTargetList)
 
     if (originColumnId !== targetColumnId) {
       const originList = cardsByColumn[originColumnId]?.filter((c) => c.id !== dragCardId) || []
-      await persistPositions(originColumnId, originList)
-
-      if (dragged.collaborator_id) {
-        const collab = collaborators.find((c) => c.id === dragged.collaborator_id)
-        const targetCol = columns.find((c) => c.id === targetColumnId)
-        if (collab?.email && collab.email !== user?.email) {
-          await notify(collab.email, {
-            type: 'card_moved',
-            title: `Card movido: ${dragged.title}`,
-            body: `Foi movido para "${targetCol?.label}"`,
-            card_id: dragged.id
-          })
-        }
-      }
+      updates.push(...diffUpdates(originColumnId, originList))
+      applyOrderLocally(originColumnId, originList)
     }
 
-    setDragCardId(null)
-    setDragOver(null)
+    // a tela ja reflete o movimento; so entao salva (em paralelo) no banco
+    resetDrag()
+
+    try {
+      const results = await Promise.all(
+        updates.map((u) =>
+          supabase.from('kanban_cards').update({ position: u.position, column_id: u.column_id }).eq('id', u.id)
+        )
+      )
+      if (results.some((r) => r.error)) throw new Error('save failed')
+    } catch {
+      pushToast({ message: 'Não foi possível salvar a movimentação. Recarregando o quadro…', type: 'error' })
+      loadBoard()
+      return
+    }
+
+    if (originColumnId !== targetColumnId && dragged.collaborator_id) {
+      const collab = collaborators.find((c) => c.id === dragged.collaborator_id)
+      const targetCol = columns.find((c) => c.id === targetColumnId)
+      if (collab?.email && collab.email !== user?.email) {
+        notify(collab.email, {
+          type: 'card_moved',
+          title: `Card movido: ${dragged.title}`,
+          body: `Foi movido para "${targetCol?.label}"`,
+          card_id: dragged.id
+        }).catch(() => {})
+      }
+    }
   }
 
   async function notify(userEmail, payload) {
@@ -177,6 +198,24 @@ export default function KanbanPage() {
       setNewColumnOpen(false)
     } catch {
       pushToast({ message: 'Não foi possível criar a coluna.', type: 'error' })
+    }
+  }
+
+  // Rola o quadro (e a coluna) sozinho quando o card e arrastado perto da borda,
+  // pra dar pra levar um card ate colunas/posicoes fora da tela.
+  function autoScrollWhileDragging(e) {
+    const board = boardRef.current
+    if (board) {
+      const r = board.getBoundingClientRect()
+      const edge = 70
+      if (e.clientX < r.left + edge) board.scrollLeft -= 16
+      else if (e.clientX > r.right - edge) board.scrollLeft += 16
+    }
+    const body = e.target.closest?.('.kb-column-body') || e.currentTarget.querySelector?.('.kb-column-body')
+    if (body) {
+      const br = body.getBoundingClientRect()
+      if (e.clientY < br.top + 50) body.scrollTop -= 14
+      else if (e.clientY > br.bottom - 50) body.scrollTop += 14
     }
   }
 
@@ -226,11 +265,29 @@ export default function KanbanPage() {
           const visibleCount = getVisibleCount(col.id)
           const visibleCards = allCards.slice(0, visibleCount)
 
+          const isDropTarget = !!dragCardId && dragOver?.columnId === col.id
+          const showEndLine = isDropTarget && dragOver?.cardId === null
+
           return (
             <div
               key={col.id}
-              className="kb-column flex-shrink-0 w-[220px] md:w-[260px] bg-bg2 rounded-card border border-border h-full"
-              onDragOver={(e) => e.preventDefault()}
+              className={`kb-column flex-shrink-0 w-[220px] md:w-[260px] rounded-card border h-full transition-colors duration-100 ${
+                isDropTarget ? 'bg-green-dim border-green' : 'bg-bg2 border-border'
+              }`}
+              onDragOver={(e) => {
+                if (!dragCardId) return
+                e.preventDefault()
+                // chegou aqui = o cursor esta no espaco da coluna fora dos cards
+                // (os cards param a propagacao): o destino e o fim da coluna
+                setDragOver((prev) =>
+                  prev?.columnId === col.id && prev?.cardId === null ? prev : { columnId: col.id, cardId: null, side: 'end' }
+                )
+                autoScrollWhileDragging(e)
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget)) return
+                setDragOver((prev) => (prev?.columnId === col.id ? null : prev))
+              }}
               onDrop={(e) => {
                 e.preventDefault()
                 handleDrop(col.id, null)
@@ -258,12 +315,26 @@ export default function KanbanPage() {
                       client={clients.find((c) => c.id === card.client_id)}
                       collaborator={collaborators.find((c) => c.id === card.collaborator_id)}
                       draggable
-                      onDragStart={() => setDragCardId(card.id)}
+                      isDragging={dragCardId === card.id}
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = 'move'
+                        // Firefox so inicia o drag se houver algum dado no dataTransfer
+                        e.dataTransfer.setData('text/plain', card.id)
+                        setDragCardId(card.id)
+                      }}
+                      onDragEnd={resetDrag}
                       onDragOver={(e) => {
+                        if (!dragCardId) return
                         e.preventDefault()
+                        e.stopPropagation()
                         const rect = e.currentTarget.getBoundingClientRect()
                         const side = e.clientY - rect.top < rect.height / 2 ? 'above' : 'below'
-                        setDragOver({ columnId: col.id, cardId: card.id, side })
+                        setDragOver((prev) =>
+                          prev?.columnId === col.id && prev?.cardId === card.id && prev?.side === side
+                            ? prev
+                            : { columnId: col.id, cardId: card.id, side }
+                        )
+                        autoScrollWhileDragging(e)
                       }}
                       onDrop={(e) => {
                         e.preventDefault()
@@ -277,6 +348,8 @@ export default function KanbanPage() {
                     )}
                   </div>
                 ))}
+
+                {showEndLine && dragCardId && <div className="kb-drop-line" />}
 
                 {allCards.length > visibleCount && (
                   <button
@@ -341,12 +414,17 @@ export default function KanbanPage() {
   )
 }
 
-function CardItem({ card, client, collaborator, onClick, ...dragProps }) {
+function CardItem({ card, client, collaborator, onClick, isDragging, ...dragProps }) {
   const cover = card.attachments?.[0]
+  // IMPORTANTE: tem que ser um <div> comum, nao um motion.div. O Framer Motion
+  // reserva onDragStart/onDrag/onDragEnd pro drag proprio dele e NAO repassa esses
+  // handlers pro DOM — o dragstart nativo nunca chegava no React, o app nao sabia
+  // qual card estava sendo arrastado e o drop era ignorado (o card "voltava").
   return (
-    <motion.div
-      whileHover={{ y: -1 }}
-      className="kb-card card p-2.5 cursor-pointer flex flex-col gap-2 bg-bg3"
+    <div
+      className={`kb-card card p-2.5 cursor-pointer flex flex-col gap-2 bg-bg3 transition-opacity ${
+        isDragging ? 'opacity-40 border-green' : ''
+      }`}
       onClick={onClick}
       {...dragProps}
     >
@@ -379,7 +457,7 @@ function CardItem({ card, client, collaborator, onClick, ...dragProps }) {
           </span>
         )}
       </div>
-    </motion.div>
+    </div>
   )
 }
 
@@ -514,8 +592,15 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
   const [mentionQuery, setMentionQuery] = useState(null)
   const [viewerIndex, setViewerIndex] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
   const [finalizeOpen, setFinalizeOpen] = useState(false)
   const textareaRef = useRef(null)
+  const attachmentsRef = useRef(card.attachments || [])
+  const latestRef = useRef({})
+
+  useEffect(() => {
+    attachmentsRef.current = card.attachments || []
+  }, [card.attachments])
 
   const client = clients.find((c) => c.id === card.client_id)
 
@@ -608,27 +693,134 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
     setComments((c) => c.filter((x) => x.id !== id))
   }
 
-  async function handleUpload(e) {
-    const files = Array.from(e.target.files || [])
+  // Sobe arquivos (botao, Ctrl+V ou arrastar) e anexa na demanda.
+  // attachmentsRef evita perder anexos quando duas colagens/uploads acontecem seguidas.
+  async function uploadFiles(files) {
     if (!files.length) return
     setUploading(true)
     try {
-      const uploaded = []
-      for (const file of files) {
-        const url = await uploadFile(file, `kanban/${card.id}`)
-        uploaded.push({ url, name: sanitizeFileName(file.name), ft: fileCategory(file.type) })
-      }
-      const attachments = [...(card.attachments || []), ...uploaded]
-      await saveField({ attachments })
+      const uploaded = await Promise.all(
+        files.map(async (file) => {
+          const url = await uploadFile(file, `kanban/${card.id}`)
+          return { url, name: sanitizeFileName(file.name), ft: fileCategory(file.type) }
+        })
+      )
+      const next = [...attachmentsRef.current, ...uploaded]
+      attachmentsRef.current = next
+      await saveField({ attachments: next })
+      pushToast({
+        message: uploaded.length === 1 ? 'Arquivo anexado à demanda.' : `${uploaded.length} arquivos anexados à demanda.`,
+        type: 'success'
+      })
+    } catch {
+      pushToast({ message: 'Não foi possível anexar o arquivo. Tente novamente.', type: 'error' })
     } finally {
       setUploading(false)
     }
   }
 
-  async function handleDeleteAttachment(index) {
-    const attachments = (card.attachments || []).filter((_, i) => i !== index)
-    await saveField({ attachments })
+  async function handleUpload(e) {
+    const files = Array.from(e.target.files || [])
+    e.target.value = '' // permite escolher o mesmo arquivo de novo depois
+    await uploadFiles(files)
   }
+
+  async function handleDeleteAttachment(index) {
+    const next = attachmentsRef.current.filter((_, i) => i !== index)
+    attachmentsRef.current = next
+    await saveField({ attachments: next })
+  }
+
+  // Ctrl+V de imagem e arrastar-e-soltar arquivos em qualquer lugar da demanda aberta.
+  latestRef.current = { uploadFiles, finalizeOpen }
+  useEffect(() => {
+    let depth = 0
+    const types = (e) => Array.from(e.dataTransfer?.types || [])
+    const hasFiles = (e) => types(e).includes('Files')
+    // imagem arrastada de outra pagina (ex: resultado do Google): vem como URL/HTML
+    const hasImageUrl = (e) => !types(e).includes('Files') && types(e).includes('text/html')
+
+    function nameFor(file, i) {
+      if (file.name && !/^image\.(png|jpe?g|gif|webp)$/i.test(file.name)) return file.name
+      const ext = (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg')
+      const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
+      return `colado-${stamp}${i ? `-${i + 1}` : ''}.${ext}`
+    }
+
+    function onPaste(e) {
+      if (latestRef.current.finalizeOpen) return
+      const files = Array.from(e.clipboardData?.items || [])
+        .filter((it) => it.kind === 'file')
+        .map((it) => it.getAsFile())
+        .filter(Boolean)
+      if (!files.length) return // texto comum: cola normalmente
+      e.preventDefault()
+      latestRef.current.uploadFiles(files.map((f, i) => new File([f], nameFor(f, i), { type: f.type })))
+    }
+
+    function onDragEnter(e) {
+      if (!hasFiles(e) && !hasImageUrl(e)) return
+      depth += 1
+      setDragActive(true)
+    }
+    function onDragOver(e) {
+      if (!hasFiles(e) && !hasImageUrl(e)) return
+      if (latestRef.current.finalizeOpen && e.target.closest?.('input[type="file"]')) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+    }
+    function onDragLeave(e) {
+      if (!hasFiles(e) && !hasImageUrl(e)) return
+      depth = Math.max(0, depth - 1)
+      if (depth === 0) setDragActive(false)
+    }
+    // com o modal "Finalizar" aberto, deixa o proprio campo de arquivo receber o drop
+    const overFileInput = (e) => latestRef.current.finalizeOpen && e.target.closest?.('input[type="file"]')
+
+    async function onDrop(e) {
+      if (!hasFiles(e) && !hasImageUrl(e)) return
+      if (overFileInput(e)) return
+      e.preventDefault()
+      depth = 0
+      setDragActive(false)
+      if (latestRef.current.finalizeOpen) return
+
+      const dropped = Array.from(e.dataTransfer.files || [])
+      if (dropped.length) {
+        latestRef.current.uploadFiles(dropped)
+        return
+      }
+      // fallback: pega a URL da <img> do HTML arrastado e baixa a imagem
+      const html = e.dataTransfer.getData('text/html')
+      const src = html && new DOMParser().parseFromString(html, 'text/html').querySelector('img')?.src
+      if (!src) return
+      try {
+        const blob = await (await fetch(src)).blob()
+        if (!blob.type.startsWith('image/')) return
+        const probe = new File([blob], '', { type: blob.type })
+        latestRef.current.uploadFiles([new File([blob], nameFor(probe, 0), { type: blob.type })])
+      } catch {
+        pushToast({
+          message: 'Esse site não permite copiar a imagem direto. Salve a imagem e arraste o arquivo, ou use Ctrl+V.',
+          type: 'error'
+        })
+      }
+    }
+
+    window.addEventListener('paste', onPaste)
+    window.addEventListener('dragenter', onDragEnter)
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('dragleave', onDragLeave)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('paste', onPaste)
+      window.removeEventListener('dragenter', onDragEnter)
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('dragleave', onDragLeave)
+      window.removeEventListener('drop', onDrop)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handleFinalize({ type, description: finalDesc, files, reuseAttachment }) {
     const { data: material, error } = await supabase
@@ -726,9 +918,12 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
           )}
 
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 gap-3">
               <span className="text-sm font-medium text-text2">Anexos</span>
-              <label className="text-xs text-green cursor-pointer flex items-center gap-1">
+              <span className="text-[11px] text-text3 hidden sm:inline">
+                Cole (Ctrl+V) ou arraste imagens para anexar
+              </span>
+              <label className="text-xs text-green cursor-pointer flex items-center gap-1 flex-shrink-0">
                 <Upload size={12} /> {uploading ? 'Enviando...' : 'Adicionar'}
                 <input type="file" multiple hidden onChange={handleUpload} disabled={uploading} />
               </label>
@@ -758,8 +953,15 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
                   </button>
                 </div>
               ))}
-              {(!card.attachments || card.attachments.length === 0) && (
-                <span className="text-xs text-text3 col-span-4">Nenhum anexo</span>
+              {uploading && (
+                <div className="aspect-square rounded-input bg-bg4 flex items-center justify-center text-green">
+                  <Spinner size={18} />
+                </div>
+              )}
+              {(!card.attachments || card.attachments.length === 0) && !uploading && (
+                <div className="col-span-4 rounded-input border border-dashed border-border2 text-center text-xs text-text3 py-5">
+                  Nenhum anexo — cole uma imagem (Ctrl+V) ou arraste um arquivo aqui
+                </div>
               )}
             </div>
           </div>
@@ -870,6 +1072,18 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
           </div>
         </div>
       </div>
+
+      {dragActive &&
+        createPortal(
+          <div className="fixed inset-0 z-[70] pointer-events-none flex items-center justify-center bg-black/60 p-6">
+            <div className="border-2 border-dashed border-green rounded-modal bg-bg3/90 px-10 py-12 text-center">
+              <Upload size={34} className="text-green mx-auto mb-3" />
+              <p className="text-text font-semibold">Solte para anexar à demanda</p>
+              <p className="text-text3 text-sm mt-1">Imagens, vídeos, PDFs e documentos</p>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {viewerIndex !== null && (
         <AttachmentViewer
