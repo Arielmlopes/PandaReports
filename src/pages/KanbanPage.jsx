@@ -15,7 +15,8 @@ import {
   Upload,
   FileText,
   CheckCircle2,
-  Pencil
+  Pencil,
+  Star
 } from 'lucide-react'
 import { supabase, uploadFile, sanitizeFileName } from '../lib/supabase'
 import { useApp } from '../contexts/AppContext'
@@ -26,6 +27,13 @@ import { downloadBlob, formatDateLong, fileCategory } from '../utils'
 
 const PAGE_SIZE = 20
 let styleInjected = false
+
+// Capa do card: a imagem marcada com `cover: true` (escolhida pelo usuario);
+// se nenhuma foi escolhida, usa a primeira imagem dos anexos.
+function getCover(attachments) {
+  const list = attachments || []
+  return list.find((a) => a.cover && a.ft === 'image') || list.find((a) => a.ft === 'image') || null
+}
 
 function injectKanbanStyles() {
   if (styleInjected) return
@@ -415,7 +423,7 @@ export default function KanbanPage() {
 }
 
 function CardItem({ card, client, collaborator, onClick, isDragging, ...dragProps }) {
-  const cover = card.attachments?.[0]
+  const cover = getCover(card.attachments)
   // IMPORTANTE: tem que ser um <div> comum, nao um motion.div. O Framer Motion
   // reserva onDragStart/onDrag/onDragEnd pro drag proprio dele e NAO repassa esses
   // handlers pro DOM — o dragstart nativo nunca chegava no React, o app nao sabia
@@ -731,6 +739,21 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
     await saveField({ attachments: next })
   }
 
+  // Marca a imagem como capa (so uma por card). Se ela ja e a capa escolhida,
+  // remove a escolha e a capa volta a ser a primeira imagem.
+  async function handleToggleCover(index) {
+    const current = attachmentsRef.current
+    if (current[index]?.ft !== 'image') return
+    const wasCover = !!current[index].cover
+    const next = current.map((a, i) => {
+      const { cover, ...rest } = a
+      return i === index && !wasCover ? { ...rest, cover: true } : rest
+    })
+    attachmentsRef.current = next
+    await saveField({ attachments: next })
+    pushToast({ message: wasCover ? 'Capa removida.' : 'Imagem definida como capa do card.', type: 'success' })
+  }
+
   // Ctrl+V de imagem e arrastar-e-soltar arquivos em qualquer lugar da demanda aberta.
   latestRef.current = { uploadFiles, finalizeOpen }
   useEffect(() => {
@@ -941,6 +964,23 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
                       <FileText size={20} className="text-text3" />
                     )}
                   </button>
+                  {a === getCover(card.attachments) && (
+                    <span className="absolute bottom-1 left-1 flex items-center gap-1 bg-green text-[#0a1206] text-[10px] font-bold rounded-full px-1.5 py-0.5 pointer-events-none">
+                      <Star size={9} fill="currentColor" /> Capa
+                    </span>
+                  )}
+                  {a.ft === 'image' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleToggleCover(i)
+                      }}
+                      className="absolute top-1 left-1 bg-black/70 rounded-full p-1 text-white/80 opacity-0 group-hover:opacity-100 hover:text-green transition-opacity"
+                      title={a.cover ? 'Remover como capa' : 'Definir como capa'}
+                    >
+                      <Star size={12} fill={a.cover ? 'currentColor' : 'none'} />
+                    </button>
+                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
@@ -1091,6 +1131,7 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
           index={viewerIndex}
           onClose={() => setViewerIndex(null)}
           onNavigate={setViewerIndex}
+          onToggleCover={handleToggleCover}
           onDelete={(i) => {
             const remaining = (card.attachments || []).length - 1
             handleDeleteAttachment(i)
@@ -1172,7 +1213,7 @@ function CommentItem({ comment, canManage, onSave, onDelete }) {
   )
 }
 
-function AttachmentViewer({ attachments, index, onClose, onNavigate, onDelete }) {
+function AttachmentViewer({ attachments, index, onClose, onNavigate, onDelete, onToggleCover }) {
   const file = attachments[index]
 
   useEffect(() => {
@@ -1192,6 +1233,20 @@ function AttachmentViewer({ attachments, index, onClose, onNavigate, onDelete })
       <div className="flex items-center justify-between p-4" onClick={(e) => e.stopPropagation()}>
         <span className="text-white/80 text-sm truncate">{file.name}</span>
         <div className="flex items-center gap-3">
+          {onToggleCover && file.ft === 'image' && (
+            <button
+              onClick={() => onToggleCover(index)}
+              className={`flex items-center gap-1.5 text-xs font-semibold rounded-full px-3 py-1.5 border transition-colors ${
+                file.cover
+                  ? 'bg-green text-[#0a1206] border-green'
+                  : 'text-white/80 border-white/30 hover:text-white hover:border-white/60'
+              }`}
+              title={file.cover ? 'Remover como capa' : 'Usar esta imagem como capa do card'}
+            >
+              <Star size={14} fill={file.cover ? 'currentColor' : 'none'} />
+              {file.cover ? 'É a capa' : 'Definir como capa'}
+            </button>
+          )}
           <button onClick={() => downloadBlob(file.url, file.name)} className="text-white/70 hover:text-white">
             <Download size={20} />
           </button>
