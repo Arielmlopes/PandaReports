@@ -16,7 +16,8 @@ import {
   FileText,
   CheckCircle2,
   Pencil,
-  Star
+  Star,
+  Play
 } from 'lucide-react'
 import { supabase, uploadFile, sanitizeFileName } from '../lib/supabase'
 import { useApp } from '../contexts/AppContext'
@@ -28,11 +29,92 @@ import { downloadBlob, formatDateLong, fileCategory } from '../utils'
 const PAGE_SIZE = 20
 let styleInjected = false
 
-// Capa do card: a imagem marcada com `cover: true` (escolhida pelo usuario);
-// se nenhuma foi escolhida, usa a primeira imagem dos anexos.
+// Anexo que pode virar capa: imagem, ou video que tenha um frame (`poster`).
+const canBeCover = (a) => a?.ft === 'image' || (a?.ft === 'video' && !!a.poster)
+// URL da imagem a mostrar: o proprio arquivo (imagem) ou o frame do video.
+const coverUrl = (a) => (a?.ft === 'video' ? a.poster : a?.url)
+
+// Capa do card: o anexo marcado com `cover: true`; se nenhum foi marcado, a primeira
+// imagem; se nao ha imagens, o frame do primeiro video.
 function getCover(attachments) {
   const list = attachments || []
-  return list.find((a) => a.cover && a.ft === 'image') || list.find((a) => a.ft === 'image') || null
+  return (
+    list.find((a) => a.cover && canBeCover(a)) ||
+    list.find((a) => a.ft === 'image') ||
+    list.find((a) => a.ft === 'video' && a.poster) ||
+    null
+  )
+}
+
+// Tira um frame do video (no navegador, sem servidor) pra servir de capa.
+// Tenta alguns instantes e escolhe o primeiro que nao seja praticamente preto.
+// Devolve um Blob JPEG, ou null se o navegador nao conseguir ler o video.
+function extractVideoFrame(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const video = document.createElement('video')
+    video.muted = true
+    video.playsInline = true
+    video.preload = 'auto'
+
+    let finished = false
+    function finish(blob) {
+      if (finished) return
+      finished = true
+      clearTimeout(timer)
+      URL.revokeObjectURL(url)
+      video.removeAttribute('src')
+      video.load()
+      resolve(blob)
+    }
+    const timer = setTimeout(() => finish(null), 15000)
+    video.onerror = () => finish(null)
+
+    video.onloadedmetadata = () => {
+      const d = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0
+      const times = d ? [Math.min(1, d / 2), d * 0.25, d * 0.5] : [0.1]
+      let attempt = 0
+      let best = null
+
+      const grab = () => {
+        const w = video.videoWidth
+        const h = video.videoHeight
+        if (!w || !h) return finish(null)
+        const scale = Math.min(1, 1280 / w)
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(w * scale)
+        canvas.height = Math.round(h * scale)
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+        // brilho medio de uma amostra pequena, pra descartar frame preto
+        const probe = ctx.getImageData(0, 0, canvas.width, canvas.height, { colorSpace: 'srgb' })
+        let sum = 0
+        let n = 0
+        for (let i = 0; i < probe.data.length; i += 4 * 97) {
+          sum += (probe.data[i] + probe.data[i + 1] + probe.data[i + 2]) / 3
+          n += 1
+        }
+        const bright = n ? sum / n : 0
+
+        canvas.toBlob(
+          (blob) => {
+            if (!best || bright > best.bright) best = { blob, bright }
+            attempt += 1
+            if (bright > 22 || attempt >= times.length) finish(best.blob)
+            else video.currentTime = times[attempt]
+          },
+          'image/jpeg',
+          0.85
+        )
+      }
+
+      video.onseeked = grab
+      video.currentTime = times[0]
+    }
+
+    video.src = url
+  })
 }
 
 function injectKanbanStyles() {
@@ -436,8 +518,8 @@ function CardItem({ card, client, collaborator, onClick, isDragging, ...dragProp
       onClick={onClick}
       {...dragProps}
     >
-      {cover?.url && cover.ft === 'image' && (
-        <img src={cover.url} alt="" loading="lazy" className="w-full h-[120px] object-cover rounded-input" />
+      {coverUrl(cover) && (
+        <img src={coverUrl(cover)} alt="" loading="lazy" className="w-full h-[120px] object-cover rounded-input" />
       )}
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: client?.color || 'var(--green)' }} />
@@ -710,14 +792,42 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
       const uploaded = await Promise.all(
         files.map(async (file) => {
           const url = await uploadFile(file, `kanban/${card.id}`)
-          return { url, name: sanitizeFileName(file.name), ft: fileCategory(file.type) }
+          const att = { url, name: sanitizeFileName(file.name), ft: fileCategory(file.type) }
+          if (att.ft === 'video') {
+            // frame do video vira a capa do card (se o navegador conseguir ler o video)
+            try {
+              const frame = await extractVideoFrame(file)
+              if (frame) {
+                att.poster = await uploadFile(
+                  new File([frame], `capa-${Date.now()}.jpg`, { type: 'image/jpeg' }),
+                  `kanban/${card.id}`
+                )
+              }
+            } catch {
+              /* sem frame: o video e anexado normalmente, so fica sem capa automatica */
+            }
+          }
+          return att
         })
       )
-      const next = [...attachmentsRef.current, ...uploaded]
+
+      // se entrou video com frame, ele passa a ser a capa (e so uma capa por card)
+      let next = [...attachmentsRef.current, ...uploaded]
+      const newVideo = [...uploaded].reverse().find((a) => a.ft === 'video' && a.poster)
+      if (newVideo) {
+        next = next.map((a) => {
+          const { cover, ...rest } = a
+          return a === newVideo ? { ...rest, cover: true } : rest
+        })
+      }
       attachmentsRef.current = next
       await saveField({ attachments: next })
       pushToast({
-        message: uploaded.length === 1 ? 'Arquivo anexado à demanda.' : `${uploaded.length} arquivos anexados à demanda.`,
+        message: newVideo
+          ? 'Vídeo anexado — a capa do card foi criada a partir de um frame.'
+          : uploaded.length === 1
+            ? 'Arquivo anexado à demanda.'
+            : `${uploaded.length} arquivos anexados à demanda.`,
         type: 'success'
       })
     } catch {
@@ -743,7 +853,7 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
   // remove a escolha e a capa volta a ser a primeira imagem.
   async function handleToggleCover(index) {
     const current = attachmentsRef.current
-    if (current[index]?.ft !== 'image') return
+    if (!canBeCover(current[index])) return
     const wasCover = !!current[index].cover
     const next = current.map((a, i) => {
       const { cover, ...rest } = a
@@ -958,10 +1068,15 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
                     onClick={() => setViewerIndex(i)}
                     className="w-full h-full flex items-center justify-center"
                   >
-                    {a.ft === 'image' ? (
-                      <img src={a.url} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    {canBeCover(a) ? (
+                      <img src={coverUrl(a)} alt="" loading="lazy" className="w-full h-full object-cover" />
                     ) : (
                       <FileText size={20} className="text-text3" />
+                    )}
+                    {a.ft === 'video' && (
+                      <span className="absolute inset-0 m-auto w-7 h-7 rounded-full bg-black/60 flex items-center justify-center pointer-events-none">
+                        <Play size={13} className="text-white ml-0.5" fill="currentColor" />
+                      </span>
                     )}
                   </button>
                   {a === getCover(card.attachments) && (
@@ -969,7 +1084,7 @@ function CardDetailModal({ card, columns, clients, collaborators, onClose, onUpd
                       <Star size={9} fill="currentColor" /> Capa
                     </span>
                   )}
-                  {a.ft === 'image' && (
+                  {canBeCover(a) && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
@@ -1218,22 +1333,29 @@ function AttachmentViewer({ attachments, index, onClose, onNavigate, onDelete, o
 
   useEffect(() => {
     function onKey(e) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        // so fecha o visualizador — sem isso o ESC tambem fechava o card por baixo
+        e.stopPropagation()
+        onClose()
+      }
       if (e.key === 'ArrowRight' && index < attachments.length - 1) onNavigate(index + 1)
       if (e.key === 'ArrowLeft' && index > 0) onNavigate(index - 1)
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [index, attachments.length, onClose, onNavigate])
 
   if (!file) return null
 
-  return (
+  // Renderiza direto no <body>: dentro do modal do card (que tem backdrop-filter)
+  // o "position: fixed" ficava preso na caixa do modal em vez de ocupar a tela toda,
+  // e a imagem vazava pra fora e era cortada.
+  return createPortal(
     <div className="fixed inset-0 z-[80] bg-black/90 flex flex-col" onClick={onClose}>
       <div className="flex items-center justify-between p-4" onClick={(e) => e.stopPropagation()}>
         <span className="text-white/80 text-sm truncate">{file.name}</span>
         <div className="flex items-center gap-3">
-          {onToggleCover && file.ft === 'image' && (
+          {onToggleCover && (file.ft === 'image' || (file.ft === 'video' && file.poster)) && (
             <button
               onClick={() => onToggleCover(index)}
               className={`flex items-center gap-1.5 text-xs font-semibold rounded-full px-3 py-1.5 border transition-colors ${
@@ -1265,7 +1387,7 @@ function AttachmentViewer({ attachments, index, onClose, onNavigate, onDelete, o
           </button>
         </div>
       </div>
-      <div className="flex-1 flex items-center justify-center relative px-12">
+      <div className="flex-1 min-h-0 flex items-center justify-center relative px-12">
         {index > 0 && (
           <button
             onClick={(e) => {
@@ -1278,13 +1400,19 @@ function AttachmentViewer({ attachments, index, onClose, onNavigate, onDelete, o
           </button>
         )}
         {file.ft === 'image' && (
-          <img src={file.url} alt="" onClick={(e) => e.stopPropagation()} className="max-h-[75vh] max-w-full object-contain" />
+          <img src={file.url} alt="" onClick={(e) => e.stopPropagation()} className="max-h-full max-w-full object-contain" />
         )}
         {file.ft === 'video' && (
-          <video src={file.url} controls onClick={(e) => e.stopPropagation()} className="max-h-[75vh] max-w-full" />
+          <video
+            src={file.url}
+            poster={file.poster || undefined}
+            controls
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-full max-w-full"
+          />
         )}
         {file.ft === 'pdf' && (
-          <iframe src={file.url} title={file.name} onClick={(e) => e.stopPropagation()} className="w-full h-[75vh] bg-white" />
+          <iframe src={file.url} title={file.name} onClick={(e) => e.stopPropagation()} className="w-full h-full bg-white" />
         )}
         {file.ft !== 'image' && file.ft !== 'video' && file.ft !== 'pdf' && (
           <div className="flex flex-col items-center gap-3 text-white" onClick={(e) => e.stopPropagation()}>
@@ -1314,8 +1442,8 @@ function AttachmentViewer({ attachments, index, onClose, onNavigate, onDelete, o
                 i === index ? 'border-green' : 'border-transparent opacity-60'
               }`}
             >
-              {a.ft === 'image' ? (
-                <img src={a.url} alt="" className="w-full h-full object-cover" />
+              {a.ft === 'image' || (a.ft === 'video' && a.poster) ? (
+                <img src={a.ft === 'video' ? a.poster : a.url} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-bg4 flex items-center justify-center">
                   <FileText size={16} className="text-text3" />
@@ -1325,7 +1453,8 @@ function AttachmentViewer({ attachments, index, onClose, onNavigate, onDelete, o
           ))}
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   )
 }
 
