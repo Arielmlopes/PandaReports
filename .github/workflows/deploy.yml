@@ -33,10 +33,9 @@ jobs:
       - name: Validar build
         run: test -f dist/index.html
 
-      - name: Configurar SSH e enviar (rsync → staging)
+      - name: Configurar SSH
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
           SSH_KEY: ${{ secrets.SSH_KEY }}
         run: |
           set -euo pipefail
@@ -44,6 +43,21 @@ jobs:
           printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
           ssh-keyscan -p 22 -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Migrations ANTES de publicar o front: se falhar, o deploy aborta e o site antigo continua no ar.
+      - name: Aplicar migrations do banco
+        env:
+          SSH_TARGET: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
+          SSH_OPTS: -i /home/runner/.ssh/id_deploy -o StrictHostKeyChecking=yes
+          DB_CONTAINER: supabase-db
+        run: scripts/apply-migrations.sh
+
+      - name: Enviar build (rsync → staging)
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -euo pipefail
           rsync -az --delete \
             -e "ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes" \
             dist/ "$SSH_USER@$SSH_HOST:/var/www/panda.staging/"

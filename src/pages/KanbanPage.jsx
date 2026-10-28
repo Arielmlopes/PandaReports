@@ -163,8 +163,9 @@ export default function KanbanPage() {
     setColumns(cols || [])
     let visibleCards = crds || []
     if (isFreelancer && user?.email) {
-      const { data: me } = await supabase.from('collaborators').select('id').eq('name', user.email).maybeSingle()
-      visibleCards = visibleCards.filter((c) => c.collaborator_id === me?.id)
+      const { data: mine } = await supabase.from('collaborators').select('id').or(`email.ilike.${user.email},name.ilike.${user.email}`)
+      const myIds = new Set((mine || []).map((m) => m.id))
+      visibleCards = visibleCards.filter((c) => myIds.has(c.collaborator_id))
     }
     setCards(visibleCards)
     setLoading(false)

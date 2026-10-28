@@ -23,15 +23,11 @@ export default function PublicBriefingPage() {
   const [protocol, setProtocol] = useState(null)
 
   useEffect(() => {
-    supabase
-      .from('clients')
-      .select('*')
-      .eq('id', clientId)
-      .maybeSingle()
-      .then(({ data }) => {
-        setClient(data)
-        setLoading(false)
-      })
+    // RPC devolve so nome/cor/logo; anon nao le a tabela clients.
+    supabase.rpc('get_public_client', { p_id: clientId }).then(({ data }) => {
+      setClient(data?.[0] || null)
+      setLoading(false)
+    })
   }, [clientId])
 
   async function handleSubmit(e) {
