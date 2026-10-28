@@ -17,9 +17,20 @@ import SettingsPage from './pages/SettingsPage'
 import PublicBriefingPage from './pages/PublicBriefingPage'
 
 function ProtectedRoute({ children }) {
-  const { session, loading } = useAuth()
+  const { session, loading, role, logout } = useAuth()
   if (loading) return <AppLoader />
   if (!session) return <Navigate to="/login" replace />
+  if (role === 'none') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-bg text-text p-6 text-center">
+        <p className="text-lg font-semibold">Sem acesso</p>
+        <p className="text-sm text-text2">Sua conta ainda não foi liberada por um administrador.</p>
+        <button onClick={logout} className="px-4 py-2 rounded-input bg-bg4 text-sm">
+          Sair
+        </button>
+      </div>
+    )
+  }
   return children
 }
 

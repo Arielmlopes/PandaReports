@@ -16,7 +16,8 @@ export function publicUrlFor(path) {
 
 export async function uploadFile(file, folder = 'misc') {
   const sanitized = sanitizeFileName(file.name)
-  const path = `${folder}/${Date.now()}_${sanitized}`
+  // UUID no caminho: a URL publica nao e adivinhavel (o bucket nao pode ser listado).
+  const path = `${folder}/${crypto.randomUUID()}_${sanitized}`
   const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(path, file, {
     cacheControl: '3600',
     upsert: false

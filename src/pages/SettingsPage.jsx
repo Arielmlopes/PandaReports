@@ -4,7 +4,7 @@ import { supabase, publicUrlFor, uploadFile } from '../lib/supabase'
 import { useApp } from '../contexts/AppContext'
 import { Button, Field, Select, Spinner } from '../components/ui'
 
-const ROLES = ['admin', 'member', 'freelancer', 'client']
+const ROLES = ['admin', 'member', 'freelancer']
 const CLIENT_COLORS = ['#5DD62C', '#3B82F6', '#EAB308', '#6366F1', '#EF4444', '#EC4899', '#14B8A6']
 
 function Section({ icon: Icon, title, children }) {
@@ -174,9 +174,8 @@ function NewUserForm({ onCreated }) {
     e.preventDefault()
     setSaving(true)
     try {
-      const { error: signUpError } = await supabase.auth.signUp({ email, password })
-      if (signUpError) throw signUpError
-      const { error } = await supabase.from('user_roles').insert({ email, role })
+      // Cadastro publico desligado: o admin cria a conta pela RPC (valida papel/senha no banco).
+      const { error } = await supabase.rpc('admin_create_user', { p_email: email, p_password: password, p_role: role })
       if (error) throw error
       setEmail('')
       setPassword('')

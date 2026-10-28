@@ -10,31 +10,28 @@ export function AuthProvider({ children }) {
   const [role, setRole] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const loadRole = useCallback(async (email) => {
-    if (!email) {
+  // Papel vem de user_roles por auth.uid(). Sem linha = sem acesso ('none'); nunca assume 'member'.
+  const loadRole = useCallback(async (userId) => {
+    if (!userId) {
       setRole(null)
       return
     }
-    const { data } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('email', email)
-      .maybeSingle()
-    setRole(data?.role || 'member')
+    const { data } = await supabase.from('user_roles').select('role').eq('user_id', userId).maybeSingle()
+    setRole(data?.role || 'none')
   }, [])
 
   useEffect(() => {
     async function init() {
       const { data } = await supabase.auth.getSession()
       setSession(data.session)
-      if (data.session?.user?.email) await loadRole(data.session.user.email)
+      if (data.session?.user?.id) await loadRole(data.session.user.id)
       setLoading(false)
     }
     init()
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession)
-      if (newSession?.user?.email) loadRole(newSession.user.email)
+      if (newSession?.user?.id) loadRole(newSession.user.id)
       else setRole(null)
     })
 
@@ -46,7 +43,7 @@ export function AuthProvider({ children }) {
     if (error) throw error
     // Resolve o role antes de devolver o controle: evita que uma navegacao
     // imediata para uma rota admin (ex: Configuracoes) veja role ainda nulo.
-    await loadRole(email)
+    await loadRole(data.user?.id)
     if (remember) {
       const saved = JSON.parse(localStorage.getItem(REMEMBER_KEY) || '[]')
       const exists = saved.find((s) => s.email === email)
